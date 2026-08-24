@@ -25,6 +25,7 @@
   *{box-sizing:border-box;margin:0;padding:0}
   body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;background:var(--bg);color:var(--text);line-height:1.5}
   .wrap{max-width:920px;margin:0 auto;padding:2rem 1rem 6.5rem}
+  @media (min-width:1024px){ .wrap{max-width:1280px} }
   header{display:flex;align-items:center;justify-content:space-between;margin-bottom:1.5rem;background:var(--accent);color:#fff;padding:14px 20px;border-radius:14px;box-shadow:0 4px 14px rgba(29,111,92,0.2)}
   header .sub{color:#cfe8de}
   .header-actions{display:flex;align-items:center;gap:10px}
@@ -47,8 +48,10 @@
   .btn-sm{padding:5px 11px;font-size:12.5px}
   .btn-veld{padding:10px 16px;font-size:15px}
   .form-group{margin-bottom:14px}
-  .row{display:flex;gap:10px}
-  .row > *{flex:1}
+  .row{display:flex;gap:10px;flex-wrap:wrap}
+  .row > *{flex:1 1 160px}
+  .table-scroll{overflow-x:auto;-webkit-overflow-scrolling:touch;margin:0 -1px}
+  @media (min-width:701px){ .table-scroll table{min-width:640px} }
   .error-msg{color:var(--danger-text);font-size:13px;margin-top:8px}
   .nav{
     position:fixed;left:0;right:0;bottom:0;z-index:500;
@@ -188,7 +191,7 @@
       </p>
     </div>
 
-    <p style="font-size:11px;color:var(--text-muted);text-align:center;margin-top:24px;line-height:1.6">&copy; 2026 VanDeLinde Consulting BV<br>v2.0.0</p>
+    <p style="font-size:11px;color:var(--text-muted);text-align:center;margin-top:24px;line-height:1.6">&copy; 2026 VanDeLinde Consulting BV<br>v2.1.0</p>
   </div>
 </div>
 
@@ -244,9 +247,9 @@
     <div class="card">
       <div style="font-weight:600;margin-bottom:12px">Nieuwe speelavond toevoegen</div>
       <div class="row" style="margin-bottom:10px">
-        <div style="flex:1"><label>Datum</label><input type="date" id="new-avond-datum"></div>
+        <div style="flex:1 1 190px"><label>Datum</label><input type="date" id="new-avond-datum"></div>
         <div style="flex:0 0 auto"><label>Aanvangstijd</label><input type="time" id="new-avond-tijd" value="19:15" style="width:8em"></div>
-        <div style="flex:1"><label>Omschrijving (kort, zichtbaar voor iedereen)</label><input id="new-avond-omschrijving" placeholder="bv. Kerstdrive" maxlength="40"></div>
+        <div style="flex:2 1 220px"><label>Omschrijving (kort, zichtbaar voor iedereen)</label><input id="new-avond-omschrijving" placeholder="bv. Kerstdrive" maxlength="40"></div>
       </div>
       <div class="row" style="margin-bottom:10px">
         <div style="flex:0 0 auto"><label>Horeca</label>
@@ -270,10 +273,12 @@
       <p id="avonden-error" class="error-msg hidden"></p>
     </div>
     <p class="sub" style="margin-bottom:10px">Wijzigingen in de tabel worden direct opgeslagen.</p>
+    <div class="table-scroll">
     <table class="responsive-table">
       <thead><tr><th>Datum</th><th>Bridge Tijd</th><th>Bijzonderheden</th><th>Omschrijving</th><th>Horeca</th><th>Horeca-tijd</th><th>Horeca Details</th><th></th></tr></thead>
       <tbody id="avonden-tbody"></tbody>
     </table>
+    </div>
   </div>
 
 </div>
@@ -1185,11 +1190,40 @@ function renderSterkte(){
   }
 }
 
+// Houdt de pagina automatisch mee-scrollend zolang tijdens het slepen de
+// aanwijzer dicht bij de boven- of onderrand van het scherm komt. `getY` geeft
+// de laatst bekende clientY terug; `onScrollTick` wordt na elke scroll-stap
+// aangeroepen zodat de sleep-visualisatie (ghost-positie, herordening) blijft
+// kloppen, ook als de gebruiker niet meer beweegt maar de rand vasthoudt.
+function startEdgeAutoScroll(getY, onScrollTick){
+  const EDGE = 90, MAX_SPEED = 18;
+  let rafId = null;
+  function tick(){
+    const y = getY();
+    const vh = window.innerHeight;
+    let dy = 0;
+    if(y !== null && y < EDGE){
+      dy = -MAX_SPEED * (1 - Math.max(y,0)/EDGE);
+    } else if(y !== null && y > vh - EDGE){
+      dy = MAX_SPEED * (1 - Math.max(vh - y,0)/EDGE);
+    }
+    if(dy){
+      const before = window.scrollY;
+      window.scrollBy(0, dy);
+      if(window.scrollY !== before && onScrollTick) onScrollTick();
+    }
+    rafId = requestAnimationFrame(tick);
+  }
+  rafId = requestAnimationFrame(tick);
+  return function stop(){ if(rafId) cancelAnimationFrame(rafId); };
+}
+
 function startSterkteDrag(e, row){
   e.preventDefault();
   const list = row.parentElement;
   const rect = row.getBoundingClientRect();
   const grabOffsetY = e.clientY - rect.top;
+  let lastY = e.clientY;
 
   const ghost = row.cloneNode(true);
   ghost.classList.add('sterkte-ghost');
@@ -1199,28 +1233,36 @@ function startSterkteDrag(e, row){
   document.body.appendChild(ghost);
   row.classList.add('sterkte-placeholder');
 
-  const onMove = (ev)=>{
-    ghost.style.top = (ev.clientY - grabOffsetY) + 'px';
+  const update = (y)=>{
+    ghost.style.top = (y - grabOffsetY) + 'px';
     const siblings = [...list.children].filter(r=>r!==row);
     for(const sib of siblings){
       const r = sib.getBoundingClientRect();
       const sibMid = r.top + r.height/2;
       const rowIdx = [...list.children].indexOf(row);
       const sibIdx = [...list.children].indexOf(sib);
-      if(ev.clientY < sibMid && sibIdx < rowIdx){
+      if(y < sibMid && sibIdx < rowIdx){
         list.insertBefore(row, sib);
         break;
       }
-      if(ev.clientY > sibMid && sibIdx > rowIdx){
+      if(y > sibMid && sibIdx > rowIdx){
         list.insertBefore(row, sib.nextSibling);
         break;
       }
     }
   };
 
+  const stopAutoScroll = startEdgeAutoScroll(()=>lastY, ()=>update(lastY));
+
+  const onMove = (ev)=>{
+    lastY = ev.clientY;
+    update(lastY);
+  };
+
   const onUp = async ()=>{
     document.removeEventListener('pointermove', onMove);
     document.removeEventListener('pointerup', onUp);
+    stopAutoScroll();
     ghost.remove();
     row.classList.remove('sterkte-placeholder');
     const orderedRows = [...list.children];
@@ -1323,6 +1365,7 @@ function startLosseDrag(e, row){
   const rect = row.getBoundingClientRect();
   const grabOffsetX = e.clientX - rect.left;
   const grabOffsetY = e.clientY - rect.top;
+  let lastX = e.clientX, lastY = e.clientY;
 
   const ghost = row.cloneNode(true);
   ghost.classList.add('sterkte-ghost');
@@ -1332,14 +1375,23 @@ function startLosseDrag(e, row){
   document.body.appendChild(ghost);
   row.classList.add('sterkte-placeholder');
 
+  const update = ()=>{
+    ghost.style.left = (lastX - grabOffsetX) + 'px';
+    ghost.style.top = (lastY - grabOffsetY) + 'px';
+  };
+
+  const stopAutoScroll = startEdgeAutoScroll(()=>lastY, update);
+
   const onMove = (ev)=>{
-    ghost.style.left = (ev.clientX - grabOffsetX) + 'px';
-    ghost.style.top = (ev.clientY - grabOffsetY) + 'px';
+    lastX = ev.clientX;
+    lastY = ev.clientY;
+    update();
   };
 
   const onUp = (ev)=>{
     document.removeEventListener('pointermove', onMove);
     document.removeEventListener('pointerup', onUp);
+    stopAutoScroll();
     ghost.remove();
     row.classList.remove('sterkte-placeholder');
 
@@ -1391,19 +1443,22 @@ async function maakNieuweTafel(avondId, paarKeyA, paarKeyB){
   if(error){ toast('Tafel maken mislukt'); return; }
   delete tafelCache[avondId];
   await renderAanwezigContent();
-  toast(`Tafel ${nummer} aangemaakt`);
+  const weergaveNr = berekenTafelWeergaveNummers(avondId)[`${groep}|${nummer}`] ?? nummer;
+  toast(`Tafel ${weergaveNr} aangemaakt`);
 }
 
 async function wijsToeAanTafel(avondId, paarKey, tafelNummer){
   const p = paarLedenLookup[paarKey];
   if(!p) return;
+  const groep = leden.find(x=>x.id===p.lidAId)?.speelsterkte || '';
   const { error } = await db.from('avond_tafels').insert({
     speelavond_id: avondId, tafel_nummer: tafelNummer, lid_a_id: p.lidAId, lid_b_id: p.lidBId
   });
   if(error){ toast('Toevoegen aan tafel mislukt'); return; }
   delete tafelCache[avondId];
   await renderAanwezigContent();
-  toast(`Toegevoegd aan tafel ${tafelNummer}`);
+  const weergaveNr = berekenTafelWeergaveNummers(avondId)[`${groep}|${tafelNummer}`] ?? tafelNummer;
+  toast(`Toegevoegd aan tafel ${weergaveNr}`);
 }
 
 async function verwijderPaarUitTafel(avondId, paarKey){
@@ -1422,6 +1477,7 @@ function startPaarDrag(e, kaart){
   const rect = kaart.getBoundingClientRect();
   const grabOffsetX = e.clientX - rect.left;
   const grabOffsetY = e.clientY - rect.top;
+  let lastX = e.clientX, lastY = e.clientY;
 
   const ghost = kaart.cloneNode(true);
   ghost.classList.add('sterkte-ghost');
@@ -1431,14 +1487,23 @@ function startPaarDrag(e, kaart){
   document.body.appendChild(ghost);
   kaart.classList.add('sterkte-placeholder');
 
+  const update = ()=>{
+    ghost.style.left = (lastX - grabOffsetX) + 'px';
+    ghost.style.top = (lastY - grabOffsetY) + 'px';
+  };
+
+  const stopAutoScroll = startEdgeAutoScroll(()=>lastY, update);
+
   const onMove = (ev)=>{
-    ghost.style.left = (ev.clientX - grabOffsetX) + 'px';
-    ghost.style.top = (ev.clientY - grabOffsetY) + 'px';
+    lastX = ev.clientX;
+    lastY = ev.clientY;
+    update();
   };
 
   const onUp = (ev)=>{
     document.removeEventListener('pointermove', onMove);
     document.removeEventListener('pointerup', onUp);
+    stopAutoScroll();
     ghost.remove();
     kaart.classList.remove('sterkte-placeholder');
 
@@ -1486,6 +1551,69 @@ function filterAanwezigZoek(waarde){
   renderAanwezigContent();
 }
 
+// Bepaalt, voor een speelavond, welke leden-paren op dit moment een geldige
+// partner-koppeling voor die avond hebben (bevestigde vaste partner, of een
+// voorstel-koppeling), ongeacht zoekfilter of open/dicht-status van groepen op de
+// beheerderspagina. Dit is dezelfde regel die renderAanwezigContent gebruikt om
+// paren te bepalen, maar dan herbruikbaar buiten die render-functie om — nodig
+// zodat ook de individuele Indeling-pagina (zonder de rijke render-context van de
+// beheerder) tot dezelfde paren en tafelnummers komt.
+function berekenGeldigeParenPerGroep(avondId){
+  const recordMap = {};
+  (aanwezigheidCache[avondId] || []).forEach(r=>{ recordMap[r.lid_id] = r.aanwezig; });
+  const ledenById = {};
+  leden.forEach(l=>{ ledenById[l.id] = l; });
+
+  const gebruikt = new Set();
+  const paren = [];
+
+  leden.forEach(l=>{
+    if(recordMap[l.id] !== true || gebruikt.has(l.id)) return;
+    if(l.vaste_partner_id && l.vaste_partner_status==='bevestigd' && recordMap[l.vaste_partner_id]===true){
+      const partner = ledenById[l.vaste_partner_id];
+      if(partner && !gebruikt.has(partner.id)){
+        paren.push({ a: l, b: partner, groep: l.speelsterkte||'' });
+        gebruikt.add(l.id); gebruikt.add(partner.id);
+      }
+    }
+  });
+
+  (voorkeurParenCache[avondId] || []).forEach(row=>{
+    const l = ledenById[row.lid_a_id], p = ledenById[row.lid_b_id];
+    const geldig = l && p && recordMap[row.lid_a_id]===true && recordMap[row.lid_b_id]===true && !gebruikt.has(row.lid_a_id) && !gebruikt.has(row.lid_b_id);
+    if(!geldig) return;
+    paren.push({ a: l, b: p, groep: l.speelsterkte||'' });
+    gebruikt.add(row.lid_a_id); gebruikt.add(row.lid_b_id);
+  });
+
+  return paren;
+}
+
+// Geeft, per speelsterktegroep, een schoon oplopend weergavenummer (1, 2, 3, ...)
+// voor elke tafel die nog minstens één geldig paar bevat. De ruwe tafel_nummer-
+// waarden in avond_tafels kunnen na veel wijzigen (tafels maken, paren eruit halen,
+// nieuwe erin) gaten en hoge waarden bevatten — de bovenste tafel op het scherm moet
+// echter altijd "Tafel 1" heten, dus wordt hier apart van de opslag bijgehouden.
+// key = "<groep>|<ruwe tafel_nummer>", value = weergavenummer.
+function berekenTafelWeergaveNummers(avondId){
+  const paren = berekenGeldigeParenPerGroep(avondId);
+  const vindPaar = (lidAId, lidBId) => paren.find(p => (p.a.id===lidAId && p.b.id===lidBId) || (p.a.id===lidBId && p.b.id===lidAId));
+
+  const nummersPerGroep = {};
+  (tafelCache[avondId] || []).forEach(row=>{
+    const paar = vindPaar(row.lid_a_id, row.lid_b_id);
+    if(!paar) return;
+    if(!nummersPerGroep[paar.groep]) nummersPerGroep[paar.groep] = new Set();
+    nummersPerGroep[paar.groep].add(row.tafel_nummer);
+  });
+
+  const map = {};
+  Object.keys(nummersPerGroep).forEach(groep=>{
+    [...nummersPerGroep[groep]].sort((a,b)=>a-b).forEach((ruw, i)=>{ map[`${groep}|${ruw}`] = i+1; });
+  });
+  return map;
+}
+
 // Bepaalt, voor een gepubliceerde avond, wat een individueel lid te zien krijgt:
 // tafel + partner (+ tegenpaar) of "op stilzit". Gaat uit van de al geladen
 // voorkeurParenCache/tafelCache voor die avond.
@@ -1501,12 +1629,19 @@ function bepaalEigenIndeling(avondId, lidId){
   if(partnerId){
     const eigenRow = tafelRows.find(r=>(r.lid_a_id===lidId && r.lid_b_id===partnerId) || (r.lid_a_id===partnerId && r.lid_b_id===lidId));
     if(eigenRow){
+      const groep = l?.speelsterkte || '';
+      // tafel_nummer is alleen uniek BINNEN een speelsterktegroep (de nummering
+      // begint voor elke groep opnieuw bij 1) — dus bij het bepalen van het
+      // tegenpaar moet ook op groep gefilterd worden, anders kan een gelijk
+      // (toevallig samenvallend) tafelnummer uit een andere groep meegepakt worden.
       const genoten = tafelRows
-        .filter(r=>r.tafel_nummer===eigenRow.tafel_nummer && r.id!==eigenRow.id)
+        .filter(r=>r.tafel_nummer===eigenRow.tafel_nummer && r.id!==eigenRow.id && (leden.find(x=>x.id===r.lid_a_id)?.speelsterkte||'')===groep)
         .flatMap(r=>[r.lid_a_id, r.lid_b_id])
         .filter(id=>id && id!==lidId && id!==partnerId)
         .map(naamVan);
-      return `Tafel ${eigenRow.tafel_nummer} — met ${naamVan(partnerId)}${genoten.length ? ', tegen ' + genoten.join(' & ') : ''}`;
+      const weergaveMap = berekenTafelWeergaveNummers(avondId);
+      const weergaveNr = weergaveMap[`${groep}|${eigenRow.tafel_nummer}`] ?? eigenRow.tafel_nummer;
+      return `Tafel ${weergaveNr} — met ${naamVan(partnerId)}${genoten.length ? ', tegen ' + genoten.join(' & ') : ''}`;
     }
   }
   return 'Op stilzit deze avond';
@@ -1782,16 +1917,21 @@ async function renderAanwezigContent(){
           const toegewezenPaarKeys = new Set(Object.values(tafelPerNummer).flat());
           const tafelNummers = Object.keys(tafelPerNummer).map(Number).sort((a,b)=>a-b);
 
-          tafelNummers.forEach(nr=>{
+          // Weergavenummer = positie binnen deze (al oplopend gesorteerde, alleen-geldige)
+          // lijst — dus altijd 1, 2, 3, ... ongeacht welke ruwe tafel_nummer-waarden er
+          // nog in avond_tafels staan. Zo blijft de bovenste tafel altijd "Tafel 1", ook
+          // als er onderweg tafels leeg zijn gehaald en er gaten in de opslag zijn ontstaan.
+          tafelNummers.forEach((nr, weergaveIdx)=>{
+            const weergaveNr = weergaveIdx + 1;
             const paarKeys = tafelPerNummer[nr];
             const parenOpTafel = paarKeys.map(k=>alleParenGroep.find(p=>p.paarKey===k)).filter(Boolean);
             const zichtbaar = parenOpTafel.filter(p=>matchtRij(p.a,p.b));
             if(!zichtbaar.length) return;
             html += `<div class="tafel-kaart" data-tafel-nummer="${nr}">
-              <div class="tafel-header">Tafel ${nr}${parenOpTafel.length < 2 ? ' <span style="font-weight:400;color:var(--text-muted)">(nog niet compleet)</span>' : ''}</div>`;
+              <div class="tafel-header">Tafel ${weergaveNr}${parenOpTafel.length < 2 ? ' <span style="font-weight:400;color:var(--text-muted)">(nog niet compleet)</span>' : ''}</div>`;
             zichtbaar.forEach(p=>{ html += paarHtml(p); });
             if(parenOpTafel.length < 2){
-              html += `<div class="paar-kaart" data-tafel-leeg="${nr}" style="border-style:dashed;justify-content:center;color:var(--text-muted);font-size:13px">Sleep hier een paar naartoe om tafel ${nr} compleet te maken</div>`;
+              html += `<div class="paar-kaart" data-tafel-leeg="${nr}" style="border-style:dashed;justify-content:center;color:var(--text-muted);font-size:13px">Sleep hier een paar naartoe om tafel ${weergaveNr} compleet te maken</div>`;
             }
             html += `</div>`;
           });
