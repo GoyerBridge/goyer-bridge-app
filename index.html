@@ -50,8 +50,8 @@
   .form-group{margin-bottom:14px}
   .row{display:flex;gap:10px;flex-wrap:wrap}
   .row > *{flex:1 1 160px}
-  .table-scroll{overflow-x:auto;-webkit-overflow-scrolling:touch;margin:0 -1px}
-  @media (min-width:1280px){ .table-scroll{max-height:65vh;overflow-y:auto} .table-scroll table{min-width:640px} }
+  .table-scroll{overflow-x:auto;-webkit-overflow-scrolling:touch;margin:0 -1px;max-height:65vh;overflow-y:auto}
+  .table-scroll table{min-width:640px}
   .error-msg{color:var(--danger-text);font-size:13px;margin-top:8px}
   .nav{
     position:fixed;left:0;right:0;bottom:0;z-index:500;
@@ -74,17 +74,8 @@
   th{text-align:left;font-weight:600;font-size:12px;color:var(--text-secondary);padding:8px;border-bottom:1px solid var(--border)}
   td{padding:9px 8px;border-bottom:1px solid var(--border)}
   .avonden-sticky-label{position:sticky;top:0;z-index:6;background:var(--bg);margin:0;padding:14px 0 10px}
-  table.responsive-table thead th{position:sticky;top:44px;z-index:5;background:var(--surface);box-shadow:0 1px 0 var(--border)}
-  @media (max-width:1279px){
-    table.responsive-table thead{display:none}
-    table.responsive-table, table.responsive-table tbody, table.responsive-table tr, table.responsive-table td{display:block;width:100%}
-    table.responsive-table tr{background:var(--surface);border-radius:12px;padding:12px 14px;margin-bottom:10px;box-shadow:0 1px 6px rgba(30,28,20,0.08)}
-    table.responsive-table td{border:none;padding:6px 0}
-    table.responsive-table td::before{content:attr(data-label);display:block;font-size:11px;font-weight:600;color:var(--text-secondary);margin-bottom:4px}
-    table.responsive-table td:first-child::before, table.responsive-table td:last-child::before{content:none}
-    table.responsive-table td:first-child{font-size:16px}
-    table.responsive-table td:last-child{padding-top:10px}
-  }
+  table.responsive-table thead th{position:sticky;top:44px;z-index:5;background:var(--surface);box-shadow:0 1px 0 var(--border);white-space:nowrap}
+  table.responsive-table td{white-space:nowrap}
   .badge{display:inline-flex;padding:2px 9px;border-radius:6px;font-size:11.5px;font-weight:600}
   .badge-accent{background:var(--accent-bg);color:var(--accent-text)}
   .badge-warning{background:var(--warning-bg);color:var(--warning-text)}
@@ -192,7 +183,7 @@
       </p>
     </div>
 
-    <p style="font-size:11px;color:var(--text-muted);text-align:center;margin-top:24px;line-height:1.6">&copy; 2026 VanDeLinde Consulting BV<br>v2.2.0</p>
+    <p style="font-size:11px;color:var(--text-muted);text-align:center;margin-top:24px;line-height:1.6">&copy; 2026 VanDeLinde Consulting BV<br>v2.2.1</p>
   </div>
 </div>
 
@@ -248,19 +239,19 @@
     <div class="card">
       <div style="font-weight:600;margin-bottom:12px">Nieuwe speelavond toevoegen</div>
       <div class="row" style="margin-bottom:10px">
-        <div style="flex:1 1 190px"><label>Datum</label><input type="date" id="new-avond-datum"></div>
-        <div style="flex:0 0 auto"><label>Aanvangstijd</label><input type="time" id="new-avond-tijd" value="19:15" style="width:8em"></div>
-        <div style="flex:2 1 220px"><label>Omschrijving (kort, zichtbaar voor iedereen)</label><input id="new-avond-omschrijving" placeholder="bv. Kerstdrive" maxlength="40"></div>
+        <div style="flex:0 0 160px"><label>Datum</label><input type="date" id="new-avond-datum"></div>
+        <div style="flex:0 0 120px"><label>Aanvangstijd</label><input type="time" id="new-avond-tijd" value="19:15"></div>
+        <div style="flex:1 1 220px"><label>Omschrijving (kort, zichtbaar voor iedereen)</label><input id="new-avond-omschrijving" placeholder="bv. Kerstdrive" maxlength="40"></div>
       </div>
       <div class="row" style="margin-bottom:10px">
-        <div style="flex:0 0 auto"><label>Horeca</label>
-          <select id="new-avond-horeca" style="width:9em">
+        <div style="flex:0 0 140px"><label>Horeca</label>
+          <select id="new-avond-horeca">
             <option value="Geen">Geen</option>
             <option value="Diner" selected>Diner</option>
             <option value="Lunch">Lunch</option>
           </select>
         </div>
-        <div style="flex:0 0 auto"><label>Tijd</label><input type="time" id="new-avond-horeca-tijd" value="18:00" style="width:8em"></div>
+        <div style="flex:0 0 120px"><label>Tijd</label><input type="time" id="new-avond-horeca-tijd" value="18:00"></div>
       </div>
       <div class="form-group">
         <label>Horeca Details (menu, inclusief prijs)</label>
