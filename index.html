@@ -50,6 +50,14 @@
   .form-group{margin-bottom:14px}
   .row{display:flex;gap:10px;flex-wrap:wrap}
   .row > *{flex:1 1 160px}
+  /* Native date/time-invoervelden (iOS Safari) tekenen zichzelf soms breder
+     dan hun CSS-breedte, wat bij een normale wrap-rij tot overlappende
+     velden kan leiden zodra de rij precies "net wel/net niet" past. Voor
+     deze rijen kiezen we daarom bewust hetzelfde patroon als de
+     Speeldagen-tabel: nooit laten krimpen/wrappen, en op een smaller
+     scherm liever horizontaal laten scrollen dan risico op overlap. */
+  .row-nowrap-scroll{flex-wrap:nowrap;overflow-x:auto;-webkit-overflow-scrolling:touch;gap:16px;padding-bottom:4px}
+  .row-nowrap-scroll > *{flex-shrink:0}
   .table-scroll{overflow-x:auto;-webkit-overflow-scrolling:touch;margin:0 -1px;max-height:65vh;overflow-y:auto}
   table.responsive-table{table-layout:fixed;width:1280px}
   .error-msg{color:var(--danger-text);font-size:13px;margin-top:8px}
@@ -183,7 +191,7 @@
       </p>
     </div>
 
-    <p style="font-size:11px;color:var(--text-muted);text-align:center;margin-top:24px;line-height:1.6">&copy; 2026 VanDeLinde Consulting BV<br>v2.3.0</p>
+    <p style="font-size:11px;color:var(--text-muted);text-align:center;margin-top:24px;line-height:1.6">&copy; 2026 VanDeLinde Consulting BV<br>v2.3.1</p>
   </div>
 </div>
 
@@ -238,20 +246,20 @@
   <div id="avondenPage" class="page">
     <div class="card">
       <div style="font-weight:600;margin-bottom:12px">Nieuwe speelavond toevoegen</div>
-      <div class="row" style="margin-bottom:10px">
-        <div style="flex:0 0 190px"><label>Datum</label><input type="date" id="new-avond-datum"></div>
-        <div style="flex:0 0 150px"><label>Aanvangstijd</label><input type="time" id="new-avond-tijd" value="19:15"></div>
-        <div style="flex:1 1 220px"><label>Omschrijving (kort, zichtbaar voor iedereen)</label><input id="new-avond-omschrijving" placeholder="bv. Kerstdrive" maxlength="40"></div>
+      <div class="row row-nowrap-scroll" style="margin-bottom:10px">
+        <div style="flex:0 0 210px"><label>Datum</label><input type="date" id="new-avond-datum"></div>
+        <div style="flex:0 0 170px"><label>Aanvangstijd</label><input type="time" id="new-avond-tijd" value="19:15"></div>
+        <div style="flex:1 0 260px"><label>Omschrijving (kort, zichtbaar voor iedereen)</label><input id="new-avond-omschrijving" placeholder="bv. Kerstdrive" maxlength="40"></div>
       </div>
-      <div class="row" style="margin-bottom:10px">
-        <div style="flex:0 0 150px"><label>Horeca</label>
+      <div class="row row-nowrap-scroll" style="margin-bottom:10px">
+        <div style="flex:0 0 180px"><label>Horeca</label>
           <select id="new-avond-horeca">
             <option value="Geen">Geen</option>
             <option value="Diner" selected>Diner</option>
             <option value="Lunch">Lunch</option>
           </select>
         </div>
-        <div style="flex:0 0 150px"><label>Tijd</label><input type="time" id="new-avond-horeca-tijd" value="18:00"></div>
+        <div style="flex:0 0 170px"><label>Tijd</label><input type="time" id="new-avond-horeca-tijd" value="18:00"></div>
       </div>
       <div class="form-group">
         <label>Horeca Details (menu, inclusief prijs)</label>
@@ -265,6 +273,7 @@
       <p id="avonden-error" class="error-msg hidden"></p>
     </div>
     <div class="table-scroll">
+    <div style="width:max-content">
     <p class="sub avonden-sticky-label">Wijzigingen in de tabel worden direct opgeslagen.</p>
     <table class="responsive-table">
       <colgroup>
@@ -273,6 +282,7 @@
       <thead><tr><th>Datum</th><th>Bridge Tijd</th><th>Omschrijving</th><th>Bijzonderheden</th><th>Horeca</th><th>Horeca-tijd</th><th>Horeca Details</th><th></th></tr></thead>
       <tbody id="avonden-tbody"></tbody>
     </table>
+    </div>
     </div>
   </div>
 
