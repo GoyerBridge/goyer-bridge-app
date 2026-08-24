@@ -51,7 +51,7 @@
   .row{display:flex;gap:10px;flex-wrap:wrap}
   .row > *{flex:1 1 160px}
   .table-scroll{overflow-x:auto;-webkit-overflow-scrolling:touch;margin:0 -1px;max-height:65vh;overflow-y:auto}
-  .table-scroll table{min-width:640px}
+  table.responsive-table{table-layout:fixed;width:1280px}
   .error-msg{color:var(--danger-text);font-size:13px;margin-top:8px}
   .nav{
     position:fixed;left:0;right:0;bottom:0;z-index:500;
@@ -74,8 +74,8 @@
   th{text-align:left;font-weight:600;font-size:12px;color:var(--text-secondary);padding:8px;border-bottom:1px solid var(--border)}
   td{padding:9px 8px;border-bottom:1px solid var(--border)}
   .avonden-sticky-label{position:sticky;top:0;z-index:6;background:var(--bg);margin:0;padding:14px 0 10px}
-  table.responsive-table thead th{position:sticky;top:44px;z-index:5;background:var(--surface);box-shadow:0 1px 0 var(--border);white-space:nowrap}
-  table.responsive-table td{white-space:nowrap}
+  table.responsive-table thead th{position:sticky;top:44px;z-index:5;background:var(--surface);box-shadow:0 1px 0 var(--border);white-space:nowrap;overflow:hidden}
+  table.responsive-table td{white-space:nowrap;overflow:hidden}
   .badge{display:inline-flex;padding:2px 9px;border-radius:6px;font-size:11.5px;font-weight:600}
   .badge-accent{background:var(--accent-bg);color:var(--accent-text)}
   .badge-warning{background:var(--warning-bg);color:var(--warning-text)}
@@ -183,7 +183,7 @@
       </p>
     </div>
 
-    <p style="font-size:11px;color:var(--text-muted);text-align:center;margin-top:24px;line-height:1.6">&copy; 2026 VanDeLinde Consulting BV<br>v2.2.1</p>
+    <p style="font-size:11px;color:var(--text-muted);text-align:center;margin-top:24px;line-height:1.6">&copy; 2026 VanDeLinde Consulting BV<br>v2.3.0</p>
   </div>
 </div>
 
@@ -239,19 +239,19 @@
     <div class="card">
       <div style="font-weight:600;margin-bottom:12px">Nieuwe speelavond toevoegen</div>
       <div class="row" style="margin-bottom:10px">
-        <div style="flex:0 0 160px"><label>Datum</label><input type="date" id="new-avond-datum"></div>
-        <div style="flex:0 0 120px"><label>Aanvangstijd</label><input type="time" id="new-avond-tijd" value="19:15"></div>
+        <div style="flex:0 0 190px"><label>Datum</label><input type="date" id="new-avond-datum"></div>
+        <div style="flex:0 0 150px"><label>Aanvangstijd</label><input type="time" id="new-avond-tijd" value="19:15"></div>
         <div style="flex:1 1 220px"><label>Omschrijving (kort, zichtbaar voor iedereen)</label><input id="new-avond-omschrijving" placeholder="bv. Kerstdrive" maxlength="40"></div>
       </div>
       <div class="row" style="margin-bottom:10px">
-        <div style="flex:0 0 140px"><label>Horeca</label>
+        <div style="flex:0 0 150px"><label>Horeca</label>
           <select id="new-avond-horeca">
             <option value="Geen">Geen</option>
             <option value="Diner" selected>Diner</option>
             <option value="Lunch">Lunch</option>
           </select>
         </div>
-        <div style="flex:0 0 120px"><label>Tijd</label><input type="time" id="new-avond-horeca-tijd" value="18:00"></div>
+        <div style="flex:0 0 150px"><label>Tijd</label><input type="time" id="new-avond-horeca-tijd" value="18:00"></div>
       </div>
       <div class="form-group">
         <label>Horeca Details (menu, inclusief prijs)</label>
@@ -267,6 +267,9 @@
     <div class="table-scroll">
     <p class="sub avonden-sticky-label">Wijzigingen in de tabel worden direct opgeslagen.</p>
     <table class="responsive-table">
+      <colgroup>
+        <col style="width:160px"><col style="width:150px"><col style="width:190px"><col style="width:190px"><col style="width:130px"><col style="width:150px"><col style="width:190px"><col style="width:120px">
+      </colgroup>
       <thead><tr><th>Datum</th><th>Bridge Tijd</th><th>Omschrijving</th><th>Bijzonderheden</th><th>Horeca</th><th>Horeca-tijd</th><th>Horeca Details</th><th></th></tr></thead>
       <tbody id="avonden-tbody"></tbody>
     </table>
@@ -1315,6 +1318,8 @@ let aanwezigZoekTerm = '';
 let voorkeurParenCache = {};
 let tafelCache = {};
 let paarLedenLookup = {};
+let losgekoppeldCache = {};
+let parenVolgordeCache = {};
 
 // De voorgestelde ("voorstel") koppelingen worden opgeslagen in de tabel
 // avond_voorkeur_paren, gekoppeld aan één specifieke speelavond_id — ze gelden dus
@@ -1334,11 +1339,15 @@ async function kiesHandmatigPartner(avondId, lidId, partnerId){
   // zodat niemand per ongeluk in twee voorstel-koppelingen tegelijk terechtkomt.
   await db.from('avond_voorkeur_paren').delete().eq('speelavond_id', avondId)
     .or(`lid_a_id.eq.${lidId},lid_b_id.eq.${lidId},lid_a_id.eq.${partnerId},lid_b_id.eq.${partnerId}`);
+  // Een expliciete koppeling voor deze avond heeft altijd voorrang op een eventuele
+  // eerdere loskoppeling van de vaste partner — die vlag is dan niet meer relevant.
+  await db.from('avond_losgekoppeld').delete().eq('speelavond_id', avondId).in('lid_id', [lidId, partnerId]);
   const { error } = await db.from('avond_voorkeur_paren').insert({
     speelavond_id: avondId, lid_a_id: lidId, lid_b_id: partnerId
   });
   if(error){ toast('Koppelen mislukt'); return; }
   delete voorkeurParenCache[avondId];
+  delete losgekoppeldCache[avondId];
   await renderAanwezigContent();
   toast('Koppeling opgeslagen voor deze avond');
 }
@@ -1349,6 +1358,56 @@ async function wisHandmatigPaar(avondId, rowId){
   if(voorkeurParenCache[avondId]) voorkeurParenCache[avondId] = voorkeurParenCache[avondId].filter(r=>r.id!==rowId);
   await renderAanwezigContent();
   toast('Voorstel verwijderd');
+}
+
+// Haalt de vaste partner van een lid voor ÉÉN specifieke avond uit elkaar, zonder
+// leden.vaste_partner_id aan te raken — geldt dus alleen voor deze speelavond.
+// De achtergebleven partner komt vanzelf bij de "losse" spelers terecht (zie de
+// paren-berekening in renderAanwezigContent, die avond_losgekoppeld raadpleegt).
+async function loadLosgekoppeldVoorAvond(avondId){
+  if(losgekoppeldCache[avondId]) return losgekoppeldCache[avondId];
+  const { data, error } = await db.from('avond_losgekoppeld').select('*').eq('speelavond_id', avondId);
+  if(error){ toast('Kon loskoppelingen niet laden'); return []; }
+  losgekoppeldCache[avondId] = data || [];
+  return losgekoppeldCache[avondId];
+}
+
+async function loskoppelenVanVastePartner(avondId, lidId){
+  if((losgekoppeldCache[avondId]||[]).some(r=>r.lid_id===lidId)) return;
+  const { error } = await db.from('avond_losgekoppeld').insert({ speelavond_id: avondId, lid_id: lidId });
+  if(error){ toast('Loskoppelen mislukt'); return; }
+  delete losgekoppeldCache[avondId];
+  await renderAanwezigContent();
+  toast('Losgekoppeld van vaste partner voor deze avond');
+}
+
+async function herstelVastePartner(avondId, lidId){
+  const { error } = await db.from('avond_losgekoppeld').delete().eq('speelavond_id', avondId).eq('lid_id', lidId);
+  if(error){ toast('Herstellen mislukt'); return; }
+  delete losgekoppeldCache[avondId];
+  await renderAanwezigContent();
+  toast('Vaste partner hersteld voor deze avond');
+}
+
+// Onthoudt de handmatige volgorde van paren in de "Nog niet ingedeeld"-lijst, per
+// avond. Bestaande rijen voor de meegegeven paar_keys worden eerst verwijderd en
+// daarna in de nieuwe volgorde opnieuw ingevoegd (zelfde delete-dan-insert-patroon
+// als elders in de app, i.p.v. upsert).
+async function loadParenVolgordeVoorAvond(avondId){
+  if(parenVolgordeCache[avondId]) return parenVolgordeCache[avondId];
+  const { data, error } = await db.from('avond_paar_volgorde').select('*').eq('speelavond_id', avondId);
+  if(error){ toast('Kon volgorde niet laden'); return []; }
+  parenVolgordeCache[avondId] = data || [];
+  return parenVolgordeCache[avondId];
+}
+
+async function persistParenVolgorde(avondId, orderedPaarKeys){
+  await db.from('avond_paar_volgorde').delete().eq('speelavond_id', avondId).in('paar_key', orderedPaarKeys);
+  const rows = orderedPaarKeys.map((paarKey, idx) => ({ speelavond_id: avondId, paar_key: paarKey, volgorde: idx }));
+  const { error } = await db.from('avond_paar_volgorde').insert(rows);
+  if(error){ toast('Volgorde opslaan mislukt'); }
+  delete parenVolgordeCache[avondId];
+  await renderAanwezigContent();
 }
 
 function startLosseDrag(e, row){
@@ -1390,12 +1449,15 @@ function startLosseDrag(e, row){
     const target = document.elementFromPoint(ev.clientX, ev.clientY);
     const rij = target && target.closest('[data-losse-rij]');
     const huidigeKoppelingId = row.dataset.huidigeKoppelingId;
+    const isVasteKoppeling = row.dataset.vasteKoppeling === '1';
 
     if(rij && rij.dataset.losseRij !== lidId){
       kiesHandmatigPartner(activeAvondAanwezigId, rij.dataset.losseRij, lidId);
     } else if(!rij){
       if(huidigeKoppelingId){
         wisHandmatigPaar(activeAvondAanwezigId, huidigeKoppelingId);
+      } else if(isVasteKoppeling){
+        loskoppelenVanVastePartner(activeAvondAanwezigId, lidId);
       } else {
         toast('Kan alleen koppelen met een speler zonder partner');
       }
@@ -1537,6 +1599,60 @@ function startPaarDrag(e, kaart){
         toast('Sleep een paar op een ander paar (of een lege tafelplek) om een tafel te vormen');
       }
     }
+  };
+
+  document.addEventListener('pointermove', onMove);
+  document.addEventListener('pointerup', onUp);
+}
+
+// Sleept een paar omhoog/omlaag binnen de "Nog niet ingedeeld"-lijst om de
+// volgorde aan te passen — los van startPaarDrag (dat tafels vormt), dus dit kan
+// nooit per ongeluk een tafel-indeling triggeren. Zelfde sleep-mechaniek als
+// startSterkteDrag op de Sterktelijst.
+function startParenVolgordeDrag(e, kaart){
+  e.preventDefault();
+  e.stopPropagation();
+  const list = kaart.parentElement;
+  const rect = kaart.getBoundingClientRect();
+  const grabOffsetY = e.clientY - rect.top;
+  let lastY = e.clientY;
+
+  const ghost = kaart.cloneNode(true);
+  ghost.classList.add('sterkte-ghost');
+  ghost.style.width = rect.width + 'px';
+  ghost.style.left = rect.left + 'px';
+  ghost.style.top = rect.top + 'px';
+  document.body.appendChild(ghost);
+  kaart.classList.add('sterkte-placeholder');
+
+  const update = (y)=>{
+    ghost.style.top = (y - grabOffsetY) + 'px';
+    const siblings = [...list.children].filter(r=>r!==kaart);
+    for(const sib of siblings){
+      const r = sib.getBoundingClientRect();
+      const sibMid = r.top + r.height/2;
+      const kaartIdx = [...list.children].indexOf(kaart);
+      const sibIdx = [...list.children].indexOf(sib);
+      if(y < sibMid && sibIdx < kaartIdx){ list.insertBefore(kaart, sib); break; }
+      if(y > sibMid && sibIdx > kaartIdx){ list.insertBefore(kaart, sib.nextSibling); break; }
+    }
+  };
+
+  const stopAutoScroll = startEdgeAutoScroll(()=>lastY, ()=>update(lastY));
+
+  const onMove = (ev)=>{
+    lastY = ev.clientY;
+    update(lastY);
+  };
+
+  const onUp = async ()=>{
+    document.removeEventListener('pointermove', onMove);
+    document.removeEventListener('pointerup', onUp);
+    stopAutoScroll();
+    ghost.remove();
+    kaart.classList.remove('sterkte-placeholder');
+    const orderedKeys = [...list.children].map(k=>k.dataset.paarKey);
+    await persistParenVolgorde(activeAvondAanwezigId, orderedKeys);
   };
 
   document.addEventListener('pointermove', onMove);
@@ -1747,14 +1863,7 @@ async function renderAanwezigContent(){
       const horecaTijd = a.horeca_tijd ? a.horeca_tijd.slice(0,5) + ' uur' : '';
       const bridgeTijd = a.aanvangstijd ? a.aanvangstijd.slice(0,5) + ' uur' : '';
 
-      html += `<div class="toggle-card" style="cursor:default;align-items:flex-start;justify-content:space-between">
-        <div>
-          <div style="font-weight:600">${fmtDatumKort(a.datum)}</div>
-          <div class="sub">${a.omschrijving || '—'}</div>
-          ${a.bijzonderheden ? `<div style="background:var(--warning-bg);color:var(--warning-text);border:1px solid var(--warning-border);border-radius:var(--radius);padding:5px 9px;font-size:12.5px;margin-top:6px;max-width:260px">⚠ ${a.bijzonderheden}</div>` : ''}
-        </div>
-        <div style="display:flex;gap:18px;flex-shrink:0;padding-top:2px">
-          ${horeca ? `<div style="text-align:center">
+      const horecaBlokHtml = horeca ? `<div style="text-align:center">
             <div style="display:flex;align-items:center;justify-content:center;gap:4px">
               <label style="display:flex;align-items:center;gap:6px;cursor:pointer">
                 <input type="checkbox" style="width:auto" ${isDiner ? 'checked' : ''} onchange="setDiner('${a.id}','${l.id}', this.checked)">
@@ -1763,15 +1872,37 @@ async function renderAanwezigContent(){
               ${a.horeca_details ? `<span onclick="toonHorecaDetails('${a.id}')" style="cursor:pointer;color:var(--text-secondary)" title="Menu-informatie">ⓘ</span>` : ''}
             </div>
             <div class="sub" style="font-size:11.5px">${horecaTijd}</div>
-          </div>` : ''}
-          <div style="text-align:center">
+          </div>` : '';
+      const bridgeBlokHtml = `<div style="text-align:center">
             <label style="display:flex;align-items:center;gap:6px;cursor:pointer;justify-content:center">
               <input type="checkbox" style="width:auto" ${isBridge ? 'checked' : ''} onchange="setAanwezig('${a.id}','${l.id}', this.checked)">
               Bridge
             </label>
             <div class="sub" style="font-size:11.5px">${bridgeTijd}</div>
+          </div>`;
+      // Volgorde op basis van de daadwerkelijke aanvangstijden: het onderdeel dat het
+      // eerst begint staat links. Bij ontbrekende tijd(en) blijft de vaste volgorde
+      // (Diner, dan Bridge) aangehouden.
+      let blokkenHtml;
+      if(!horeca){
+        blokkenHtml = bridgeBlokHtml;
+      } else if(a.horeca_tijd && a.aanvangstijd && a.aanvangstijd < a.horeca_tijd){
+        blokkenHtml = bridgeBlokHtml + horecaBlokHtml;
+      } else {
+        blokkenHtml = horecaBlokHtml + bridgeBlokHtml;
+      }
+
+      html += `<div class="toggle-card" style="cursor:default;flex-direction:column;align-items:stretch;gap:6px">
+        <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px">
+          <div>
+            <div style="font-weight:600">${fmtDatumKort(a.datum)}</div>
+            <div class="sub">${a.omschrijving || '—'}</div>
+          </div>
+          <div style="display:flex;gap:18px;flex-shrink:0;padding-top:2px">
+            ${blokkenHtml}
           </div>
         </div>
+        ${a.bijzonderheden ? `<div class="sub">${a.bijzonderheden}</div>` : ''}
       </div>`;
     });
 
@@ -1785,6 +1916,11 @@ async function renderAanwezigContent(){
   const records = await loadAanwezigheidVoorAvond(activeAvondAanwezigId);
   const voorkeurParenRows = await loadVoorkeurParenVoorAvond(activeAvondAanwezigId);
   const tafelRows = await loadTafelsVoorAvond(activeAvondAanwezigId);
+  const losgekoppeldRows = await loadLosgekoppeldVoorAvond(activeAvondAanwezigId);
+  const parenVolgordeRows = await loadParenVolgordeVoorAvond(activeAvondAanwezigId);
+  const losgekoppeldSet = new Set(losgekoppeldRows.map(r=>r.lid_id));
+  const volgordeMap = {};
+  parenVolgordeRows.forEach(r=>{ volgordeMap[r.paar_key] = r.volgorde; });
   paarLedenLookup = {};
   const recordMap = {};
   records.forEach(r=>{ recordMap[r.lid_id] = r.aanwezig; });
@@ -1837,19 +1973,13 @@ async function renderAanwezigContent(){
       }
 
       {
-        // Wie heeft al een partner voor vanavond? Eerst de bevestigde vaste partners, dan de handmatige voorstellen.
+        // Wie heeft al een partner voor vanavond? Een handmatige voorstel-koppeling
+        // (avond_voorkeur_paren) heeft altijd voorrang op de automatische vaste-
+        // partnerkoppeling — zo kan een vaste partner voor één avond uit elkaar
+        // worden gehaald: zodra iemand een voorstel-koppeling heeft (of expliciet is
+        // losgekoppeld via avond_losgekoppeld), wordt de vaste-partnerkoppeling voor
+        // deze avond overgeslagen en komt de ander vanzelf bij de "losse" spelers.
         const gebruikt = new Set();
-        const bevestigdParen = [];
-        groepen.aangemeld.forEach(l=>{
-          if(gebruikt.has(l.id)) return;
-          if(l.vaste_partner_id && l.vaste_partner_status==='bevestigd' && recordMap[l.vaste_partner_id]===true){
-            const partner = ledenById[l.vaste_partner_id];
-            if(partner && !gebruikt.has(partner.id)){
-              bevestigdParen.push({ a: l, b: partner, groep: l.speelsterkte||'' });
-              gebruikt.add(l.id); gebruikt.add(partner.id);
-            }
-          }
-        });
 
         const handmatigParen = [];
         voorkeurParenRows.slice().forEach(row=>{
@@ -1863,6 +1993,18 @@ async function renderAanwezigContent(){
           }
           handmatigParen.push({ a: l, b: p, groep: l.speelsterkte||'', rowId: row.id });
           gebruikt.add(row.lid_a_id); gebruikt.add(row.lid_b_id);
+        });
+
+        const bevestigdParen = [];
+        groepen.aangemeld.forEach(l=>{
+          if(gebruikt.has(l.id) || losgekoppeldSet.has(l.id)) return;
+          if(l.vaste_partner_id && l.vaste_partner_status==='bevestigd' && recordMap[l.vaste_partner_id]===true){
+            const partner = ledenById[l.vaste_partner_id];
+            if(partner && !gebruikt.has(partner.id) && !losgekoppeldSet.has(partner.id)){
+              bevestigdParen.push({ a: l, b: partner, groep: l.speelsterkte||'' });
+              gebruikt.add(l.id); gebruikt.add(partner.id);
+            }
+          }
         });
 
         const singles = groepen.aangemeld.filter(l=>!gebruikt.has(l.id));
@@ -1932,21 +2074,22 @@ async function renderAanwezigContent(){
             return;
           }
 
-          const paarHtml = (p)=>{
+          const paarHtml = (p, toonVolgordeHandle)=>{
             const isVoorstel = !!p.rowId;
             const kleur = isVoorstel ? 'border-style:dashed;border-color:var(--accent)' : 'background:var(--accent-bg)';
             const persoonHtml = (persoon)=>`
-                <div class="pair-row" style="flex:1;min-width:160px;margin-bottom:0;${kleur}" ${isVoorstel ? `data-lid-id="${persoon.id}" data-huidige-koppeling-id="${p.rowId}"` : ''}>
+                <div class="pair-row" style="flex:1;min-width:160px;margin-bottom:0;${kleur}" data-lid-id="${persoon.id}" ${isVoorstel ? `data-huidige-koppeling-id="${p.rowId}"` : `data-vaste-koppeling="1"`}>
                   <div class="avatar" style="background:var(--success-bg);color:var(--success-text);cursor:pointer" onclick="bevestigUitschrijven('${persoon.id}')" title="Klik om deze speler uit te schrijven">${initialenVan(persoon.id)}</div>
                   <span style="flex:1">${persoon.voornaam} ${persoon.achternaam}</span>
                   <span style="color:var(--text-secondary);font-size:12px">${persoon.speelsterkte ? persoon.speelsterkte + ' / ' : ''}${sterkteRangVan(persoon.id) ?? ''}</span>
-                  ${isVoorstel ? '<span class="drag-handle losse-lid-drag" title="Sleep om deze speler los te koppelen of opnieuw te koppelen">⠿</span>' : ''}
+                  <span class="drag-handle losse-lid-drag" title="${isVoorstel ? 'Sleep om deze speler los te koppelen of opnieuw te koppelen' : 'Sleep om deze speler los te koppelen van de vaste partner voor deze avond'}">⠿</span>
                 </div>`;
             return `<div class="paar-kaart" data-paar-key="${p.paarKey}">
               <div style="display:flex;flex:1;gap:10px;flex-wrap:wrap">
                 ${persoonHtml(p.a)}
                 ${persoonHtml(p.b)}
               </div>
+              ${toonVolgordeHandle ? '<span class="drag-handle paar-volgorde-handle" title="Sleep om de volgorde in deze lijst aan te passen">⇅</span>' : ''}
               <span class="drag-handle paar-drag-handle" title="Sleep het hele paar naar een tafel">⠿</span>
             </div>`;
           };
@@ -1972,8 +2115,20 @@ async function renderAanwezigContent(){
 
           const nietToegewezen = alleParenGroep.filter(p=>!toegewezenPaarKeysAlles.has(p.paarKey) && matchtRij(p.a,p.b));
           if(nietToegewezen.length){
+            // Bewaarde volgorde eerst (in die volgorde), paren zonder bewaarde positie
+            // erna, alfabetisch — zo blijft een eerder ingestelde volgorde staan totdat
+            // hij weer wordt aangepast (zie startParenVolgordeDrag/persistParenVolgorde).
+            const nietToegewezenGesorteerd = nietToegewezen.slice().sort((x,y)=>{
+              const vx = volgordeMap[x.paarKey], vy = volgordeMap[y.paarKey];
+              if(vx != null && vy != null) return vx - vy;
+              if(vx != null) return -1;
+              if(vy != null) return 1;
+              return x.a.voornaam.localeCompare(y.a.voornaam);
+            });
             html += `<div style="font-size:12px;color:var(--text-muted);margin:10px 0 4px">Nog niet ingedeeld aan een tafel</div>`;
-            nietToegewezen.forEach(p=>{ html += paarHtml(p); });
+            html += `<div class="paren-volgorde-lijst" data-groep="${g}">`;
+            nietToegewezenGesorteerd.forEach(p=>{ html += paarHtml(p, true); });
+            html += `</div>`;
           }
 
           singlesInGroep.forEach(l=>{
@@ -1982,10 +2137,12 @@ async function renderAanwezigContent(){
               .map(id=>ledenById[id])
               .filter(Boolean)
               .sort((x,y)=>x.voornaam.localeCompare(y.voornaam));
+            const isLosgekoppeld = losgekoppeldSet.has(l.id);
             html += `<div style="display:flex;align-items:stretch;gap:10px;margin-bottom:6px;flex-wrap:wrap" data-losse-rij="${l.id}">
               <div class="pair-row" style="flex:1;min-width:180px;margin-bottom:0" data-lid-id="${l.id}">
                 <div class="avatar" style="background:var(--success-bg);color:var(--success-text);cursor:pointer" onclick="bevestigUitschrijven('${l.id}')" title="Klik om deze speler uit te schrijven">${initialenVan(l.id)}</div>
                 <span style="flex:1">${l.voornaam} ${l.achternaam}</span>
+                ${isLosgekoppeld ? `<span class="badge badge-warning" title="Losgekoppeld van vaste partner voor deze avond">los van vaste partner</span>` : ''}
                 <span style="color:var(--text-secondary);font-size:12px">${g ? g + ' / ' : ''}${sterkteRangVan(l.id) ?? ''}</span>
                 <span class="drag-handle losse-lid-drag" title="Sleep om te koppelen">⠿</span>
               </div>
@@ -1994,6 +2151,7 @@ async function renderAanwezigContent(){
                   <option value="">Kies een partner voor vanavond...</option>
                   ${opties.map(p=>`<option value="${p.id}">${p.voornaam} ${p.achternaam}</option>`).join('')}
                 </select>` : ''}
+                ${isLosgekoppeld ? `<button class="btn btn-sm" onclick="herstelVastePartner('${activeAvondAanwezigId}','${l.id}')" title="Herstel de automatische koppeling met de vaste partner voor deze avond">Herstel vaste partner</button>` : ''}
               </div>
             </div>`;
           });
@@ -2033,6 +2191,10 @@ async function renderAanwezigContent(){
     c.querySelectorAll('.paar-drag-handle').forEach(handle=>{
       const kaart = handle.closest('.paar-kaart');
       handle.addEventListener('pointerdown', e=>startPaarDrag(e, kaart));
+    });
+    c.querySelectorAll('.paar-volgorde-handle').forEach(handle=>{
+      const kaart = handle.closest('.paar-kaart');
+      handle.addEventListener('pointerdown', e=>startParenVolgordeDrag(e, kaart));
     });
   }
 
@@ -2143,10 +2305,11 @@ async function togglePublicatie(avondId){
   toast(nieuweStatus ? 'Speelavond gepubliceerd' : 'Speelavond gedepubliceerd');
 }
 
-// Wist voor deze speelavond zowel de tafelindeling (avond_tafels) als de
-// teamindeling/voorstel-koppelingen (avond_voorkeur_paren), zodat de indeler
-// helemaal opnieuw kan beginnen. Bevestigde vaste partnerschappen (leden.vaste_partner_id)
-// blijven ongemoeid — dat is geen avondgebonden gegeven.
+// Wist voor deze speelavond de tafelindeling (avond_tafels), de teamindeling/
+// voorstel-koppelingen (avond_voorkeur_paren), de loskoppelingen van vaste
+// partners (avond_losgekoppeld) en de handmatige volgorde (avond_paar_volgorde),
+// zodat de indeler helemaal opnieuw kan beginnen. Bevestigde vaste partnerschappen
+// (leden.vaste_partner_id) blijven ongemoeid — dat is geen avondgebonden gegeven.
 async function wisIndeling(avondId){
   if(!confirm('Alle tafel- en teamindelingen worden gewist. Weet u het zeker?')) return;
 
@@ -2156,8 +2319,13 @@ async function wisIndeling(avondId){
   const { error: parenError } = await db.from('avond_voorkeur_paren').delete().eq('speelavond_id', avondId);
   if(parenError){ toast('Wissen van teamindeling mislukt'); return; }
 
+  await db.from('avond_losgekoppeld').delete().eq('speelavond_id', avondId);
+  await db.from('avond_paar_volgorde').delete().eq('speelavond_id', avondId);
+
   delete tafelCache[avondId];
   delete voorkeurParenCache[avondId];
+  delete losgekoppeldCache[avondId];
+  delete parenVolgordeCache[avondId];
   await renderAanwezigContent();
   toast('Indeling gewist');
 }
