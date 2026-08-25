@@ -59,7 +59,7 @@
   .row-nowrap-scroll{flex-wrap:nowrap;overflow-x:auto;-webkit-overflow-scrolling:touch;gap:16px;padding-bottom:4px}
   .row-nowrap-scroll > *{flex-shrink:0}
   .table-scroll{overflow-x:auto;-webkit-overflow-scrolling:touch;margin:0 -1px;max-height:65vh;overflow-y:auto}
-  table.responsive-table{table-layout:fixed;width:1280px}
+  table.responsive-table{table-layout:fixed;width:1110px}
   .error-msg{color:var(--danger-text);font-size:13px;margin-top:8px}
   .nav{
     position:fixed;left:0;right:0;bottom:0;z-index:500;
@@ -191,7 +191,7 @@
       </p>
     </div>
 
-    <p style="font-size:11px;color:var(--text-muted);text-align:center;margin-top:24px;line-height:1.6">&copy; 2026 VanDeLinde Consulting BV<br>v2.3.1</p>
+    <p style="font-size:11px;color:var(--text-muted);text-align:center;margin-top:24px;line-height:1.6">&copy; 2026 VanDeLinde Consulting BV<br>v2.3.2</p>
   </div>
 </div>
 
@@ -247,26 +247,24 @@
     <div class="card">
       <div style="font-weight:600;margin-bottom:12px">Nieuwe speelavond toevoegen</div>
       <div class="row row-nowrap-scroll" style="margin-bottom:10px">
-        <div style="flex:0 0 210px"><label>Datum</label><input type="date" id="new-avond-datum"></div>
-        <div style="flex:0 0 170px"><label>Aanvangstijd</label><input type="time" id="new-avond-tijd" value="19:15"></div>
-        <div style="flex:1 0 260px"><label>Omschrijving (kort, zichtbaar voor iedereen)</label><input id="new-avond-omschrijving" placeholder="bv. Kerstdrive" maxlength="40"></div>
+        <div style="flex:0 0 160px"><label>Datum</label><input type="date" id="new-avond-datum"></div>
+        <div style="flex:0 0 120px"><label>Aanvangstijd</label><input type="time" id="new-avond-tijd" value="19:15"></div>
+        <div style="flex:1 0 260px"><label>Event</label><input id="new-avond-omschrijving" placeholder="bv. Kerstdrive" maxlength="40"></div>
       </div>
       <div class="row row-nowrap-scroll" style="margin-bottom:10px">
-        <div style="flex:0 0 180px"><label>Horeca</label>
-          <select id="new-avond-horeca">
+        <div style="flex:0 0 110px"><label>Horeca</label>
+          <select id="new-avond-horeca" onchange="toggleNieuweHorecaAnders()">
             <option value="Geen">Geen</option>
             <option value="Diner" selected>Diner</option>
             <option value="Lunch">Lunch</option>
+            <option value="Anders">Anders (vul in)</option>
           </select>
         </div>
-        <div style="flex:0 0 170px"><label>Tijd</label><input type="time" id="new-avond-horeca-tijd" value="18:00"></div>
+        <div style="flex:0 0 120px"><label>Tijd</label><input type="time" id="new-avond-horeca-tijd" value="18:00"></div>
+        <div id="new-avond-horeca-anders-wrap" class="hidden" style="flex:0 0 220px"><label>Horeca (vul in)</label><input id="new-avond-horeca-anders" placeholder="bv. Borrel met bitterballen" maxlength="40"></div>
       </div>
       <div class="form-group">
-        <label>Horeca Details (menu, inclusief prijs)</label>
-        <input id="new-avond-horeca-details" placeholder="bv. Stamppotbuffet, € 15,-">
-      </div>
-      <div class="form-group">
-        <label>Bijzonderheden</label>
+        <label>Omschrijving</label>
         <input id="new-avond-bijzonderheden" placeholder="bv. Let op: andere zaal deze avond">
       </div>
       <button class="btn btn-primary" onclick="addAvond()">Toevoegen</button>
@@ -277,9 +275,9 @@
     <p class="sub avonden-sticky-label">Wijzigingen in de tabel worden direct opgeslagen.</p>
     <table class="responsive-table">
       <colgroup>
-        <col style="width:160px"><col style="width:150px"><col style="width:190px"><col style="width:190px"><col style="width:130px"><col style="width:150px"><col style="width:190px"><col style="width:120px">
+        <col style="width:160px"><col style="width:150px"><col style="width:190px"><col style="width:190px"><col style="width:150px"><col style="width:150px"><col style="width:120px">
       </colgroup>
-      <thead><tr><th>Datum</th><th>Bridge Tijd</th><th>Omschrijving</th><th>Bijzonderheden</th><th>Horeca</th><th>Horeca-tijd</th><th>Horeca Details</th><th></th></tr></thead>
+      <thead><tr><th>Datum</th><th>Bridge Tijd</th><th>Event</th><th>Omschrijving</th><th>Horeca</th><th>Horeca-tijd</th><th></th></tr></thead>
       <tbody id="avonden-tbody"></tbody>
     </table>
     </div>
@@ -1879,7 +1877,6 @@ async function renderAanwezigContent(){
                 <input type="checkbox" style="width:auto" ${isDiner ? 'checked' : ''} onchange="setDiner('${a.id}','${l.id}', this.checked)">
                 ${horeca}
               </label>
-              ${a.horeca_details ? `<span onclick="toonHorecaDetails('${a.id}')" style="cursor:pointer;color:var(--text-secondary)" title="Menu-informatie">ⓘ</span>` : ''}
             </div>
             <div class="sub" style="font-size:11.5px">${horecaTijd}</div>
           </div>` : '';
@@ -2254,11 +2251,6 @@ async function setDiner(avondId, lidId, diner){
   await renderAanwezigContent();
 }
 
-function toonHorecaDetails(avondId){
-  const avond = speelavonden.find(a=>a.id===avondId);
-  if(avond?.horeca_details) toonInfoModal(avond.horeca_details);
-}
-
 function toonInfoModal(tekst){
   document.getElementById('infoModal-tekst').textContent = tekst;
   document.getElementById('infoModal').classList.remove('hidden');
@@ -2348,7 +2340,7 @@ function renderAvonden(){
   tbody.innerHTML = '';
   const sorted = [...speelavonden].sort((a,b)=>new Date(a.datum)-new Date(b.datum));
   if(!sorted.length){
-    tbody.innerHTML = `<tr><td colspan="8" class="empty">Nog geen speelavonden ingepland.</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="7" class="empty">Nog geen speelavonden ingepland.</td></tr>`;
     return;
   }
   sorted.forEach(a=>{
@@ -2356,8 +2348,8 @@ function renderAvonden(){
     tbody.innerHTML += `<tr>
       <td data-label="Datum"><input type="date" value="${a.datum}" onchange="updateAvondField('${a.id}','datum',this.value)"></td>
       <td data-label="Bridge Tijd"><input type="time" value="${(a.aanvangstijd||'').slice(0,5)}" onchange="updateAvondField('${a.id}','aanvangstijd',this.value || null)"></td>
-      <td data-label="Omschrijving"><input value="${a.omschrijving || ''}" style="min-width:150px" maxlength="40" onchange="updateAvondField('${a.id}','omschrijving',this.value || null)"></td>
-      <td data-label="Bijzonderheden">${open ? `
+      <td data-label="Event"><input value="${a.omschrijving || ''}" style="min-width:150px" maxlength="40" onchange="updateAvondField('${a.id}','omschrijving',this.value || null)"></td>
+      <td data-label="Omschrijving">${open ? `
         <textarea rows="3" style="width:100%;min-width:170px;font-family:inherit;font-size:15px;padding:10px 12px;border:1px solid var(--border-strong);border-radius:var(--radius);background:var(--surface);color:var(--text)" onchange="updateAvondField('${a.id}','bijzonderheden',this.value || null)">${a.bijzonderheden || ''}</textarea>
         <span onclick="toggleAvondBijzonderheden('${a.id}')" style="cursor:pointer;color:var(--text-secondary);font-size:12px">▴ Inklappen</span>
       ` : `
@@ -2366,13 +2358,17 @@ function renderAvonden(){
           <span onclick="toggleAvondBijzonderheden('${a.id}')" style="cursor:pointer;color:var(--text-secondary)" title="Uitklappen">⤢</span>
         </div>
       `}</td>
-      <td data-label="Horeca"><select style="min-width:90px" onchange="updateAvondField('${a.id}','horeca',this.value)">
+      <td data-label="Horeca">${(() => {
+        const horecaBekend = ['Geen','Diner','Lunch'];
+        const isAnders = !!a.horeca && !horecaBekend.includes(a.horeca);
+        return `<select style="min-width:90px" onchange="updateAvondHorecaSelect('${a.id}', this)">
         <option value="Geen" ${a.horeca==='Geen'?'selected':''}>Geen</option>
-        <option value="Diner" ${a.horeca!=='Geen' && a.horeca!=='Lunch'?'selected':''}>Diner</option>
+        <option value="Diner" ${(!a.horeca || a.horeca==='Diner')?'selected':''}>Diner</option>
         <option value="Lunch" ${a.horeca==='Lunch'?'selected':''}>Lunch</option>
-      </select></td>
+        <option value="Anders" ${isAnders?'selected':''}>Anders (vul in)</option>
+      </select>${isAnders ? `<input value="${a.horeca==='Anders' ? '' : a.horeca}" placeholder="Omschrijving" style="margin-top:6px;width:100%" onchange="updateAvondField('${a.id}','horeca',this.value.trim() || 'Anders')">` : ''}`;
+      })()}</td>
       <td data-label="Horeca-tijd"><input type="time" value="${(a.horeca_tijd||'').slice(0,5)}" onchange="updateAvondField('${a.id}','horeca_tijd',this.value || null)"></td>
-      <td data-label="Horeca Details"><input value="${a.horeca_details || ''}" style="min-width:170px" onchange="updateAvondField('${a.id}','horeca_details',this.value || null)"></td>
       <td><button class="btn btn-sm btn-danger" style="width:100%;justify-content:center" onclick="removeAvond('${a.id}')">Verwijderen</button></td>
     </tr>`;
   });
@@ -2393,13 +2389,24 @@ async function updateAvondField(id, field, value){
   toast('Opgeslagen');
 }
 
+async function updateAvondHorecaSelect(id, selectEl){
+  await updateAvondField(id, 'horeca', selectEl.value);
+  renderAvonden();
+}
+
+function toggleNieuweHorecaAnders(){
+  const isAnders = document.getElementById('new-avond-horeca').value === 'Anders';
+  document.getElementById('new-avond-horeca-anders-wrap').classList.toggle('hidden', !isAnders);
+}
+
 async function addAvond(){
   const datum = document.getElementById('new-avond-datum').value;
   const aanvangstijd = document.getElementById('new-avond-tijd').value || null;
   const omschrijving = document.getElementById('new-avond-omschrijving').value.trim();
-  const horeca = document.getElementById('new-avond-horeca').value;
+  const horecaSelect = document.getElementById('new-avond-horeca').value;
+  const horecaAnders = document.getElementById('new-avond-horeca-anders').value.trim();
+  const horeca = horecaSelect === 'Anders' ? (horecaAnders || 'Anders') : horecaSelect;
   const horecaTijd = document.getElementById('new-avond-horeca-tijd').value || null;
-  const horecaDetails = document.getElementById('new-avond-horeca-details').value.trim();
   const bijzonderheden = document.getElementById('new-avond-bijzonderheden').value.trim();
   const errEl = document.getElementById('avonden-error');
   errEl.classList.add('hidden');
@@ -2416,7 +2423,6 @@ async function addAvond(){
     datum, aanvangstijd, aantal_zalen: 3, max_per_zaal: 36,
     omschrijving: omschrijving || null,
     horeca, horeca_tijd: horecaTijd,
-    horeca_details: horecaDetails || null,
     bijzonderheden: bijzonderheden || null
   });
 
@@ -2431,7 +2437,8 @@ async function addAvond(){
   document.getElementById('new-avond-omschrijving').value = '';
   document.getElementById('new-avond-horeca').value = 'Diner';
   document.getElementById('new-avond-horeca-tijd').value = '18:00';
-  document.getElementById('new-avond-horeca-details').value = '';
+  document.getElementById('new-avond-horeca-anders').value = '';
+  document.getElementById('new-avond-horeca-anders-wrap').classList.add('hidden');
   document.getElementById('new-avond-bijzonderheden').value = '';
 
   await loadSpeelavonden();
