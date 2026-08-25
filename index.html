@@ -39,8 +39,16 @@
   input:not([type="checkbox"]),select{width:100%;height:41px;border:1px solid var(--border-strong);border-radius:var(--radius);padding:0 12px;font-size:15px;background:var(--surface);color:var(--text)}
   input:focus,select:focus{outline:none;border-color:var(--accent)}
   /* iOS Safari tekent de tekst in native datum-/tijdvelden gecentreerd i.p.v.
-     links (Chrome doet dit wel links); dit forceert links uitlijnen overal. */
-  input[type="date"],input[type="time"]{text-align:left}
+     links (Chrome doet dit wel links); dit forceert links uitlijnen overal.
+     (Op echte iPhone/iPad bleek dit niet altijd effect te hebben op het
+     interne, door iOS zelf getekende deel van het veld — zie hieronder.)
+     Daarnaast: iOS Safari's native datum-/tijdveld tekent zijn eigen
+     "chrome" soms breder dan de CSS-breedte van het veld toelaat, waardoor
+     het zichtbaar over het volgende veld heen loopt — ongeacht hoeveel
+     ruimte (gap/margin) daartussen staat. overflow:hidden op het veld zelf
+     knipt dat teveel weg, zodat het veld nooit buiten zijn eigen kader
+     kan tekenen. */
+  input[type="date"],input[type="time"]{text-align:left;overflow:hidden}
   .btn{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--border-strong);background:var(--surface);padding:9px 16px;border-radius:var(--radius);cursor:pointer;font-size:14px;color:var(--text)}
   .btn:hover{background:var(--bg)}
   .btn-primary{background:var(--accent);color:#fff;border-color:var(--accent);box-shadow:0 2px 6px rgba(29,111,92,0.25)}
@@ -54,18 +62,19 @@
   .row{display:flex;gap:10px;flex-wrap:wrap}
   .row > *{flex:1 1 160px}
   /* Native date/time-invoervelden (iOS Safari) tekenen zichzelf soms breder
-     dan hun CSS-breedte, wat bij een normale wrap-rij tot overlappende
-     velden kan leiden zodra de rij precies "net wel/net niet" past. Voor
-     deze rijen kiezen we daarom bewust hetzelfde patroon als de
-     Speeldagen-tabel: nooit laten krimpen/wrappen, en op een smaller
-     scherm liever horizontaal laten scrollen dan risico op overlap.
-     Let op: flexbox "gap" bleek op iPad/iPhone Safari niet betrouwbaar
-     toegepast te worden tussen de velden (bevestigd op echte apparaten:
-     de velden raakten elkaar zonder tussenruimte, terwijl desktop wel
-     goed was). Daarom hier bewust margin i.p.v. gap: dat werkt in alle
-     browsers hetzelfde, ongeacht gap-ondersteuning. */
+     dan hun CSS-breedte toestaat — het interne, door iOS zelf getekende
+     deel van het veld loopt dan zichtbaar over de rand van zijn eigen
+     kader heen, over het volgende veld. Dit gebeurde op echte iPhone/iPad
+     ook nadat de tussenruimte al met margin i.p.v. flexbox-gap was
+     opgelost (bevestigd door Kay op twee toestellen, beide al op de
+     nieuwe versie) — dus puur meer ruimte tussen de velden was niet
+     genoeg, het veld zelf moest geknipt worden op zijn eigen kader.
+     Daarom hier, samen met overflow:hidden op de input zelf (zie hierboven
+     bij input[type=date]), ook overflow:hidden op de omhullende div: een
+     tweede laag die garandeert dat niets — van welk niveau dan ook — over
+     de rand van het toegewezen vak kan tekenen. */
   .row-nowrap-scroll{flex-wrap:nowrap;overflow-x:auto;-webkit-overflow-scrolling:touch;padding-bottom:4px;gap:0}
-  .row-nowrap-scroll > *{flex-shrink:0;margin-right:16px}
+  .row-nowrap-scroll > *{flex-shrink:0;margin-right:16px;overflow:hidden}
   .row-nowrap-scroll > *:last-child{margin-right:0}
   .table-scroll{overflow-x:auto;-webkit-overflow-scrolling:touch;margin:0 -1px;max-height:65vh;overflow-y:auto}
   table.responsive-table{table-layout:fixed;width:1200px}
@@ -200,7 +209,7 @@
       </p>
     </div>
 
-    <p style="font-size:11px;color:var(--text-muted);text-align:center;margin-top:24px;line-height:1.6">&copy; 2026 VanDeLinde Consulting BV<br>v2.3.5</p>
+    <p style="font-size:11px;color:var(--text-muted);text-align:center;margin-top:24px;line-height:1.6">&copy; 2026 VanDeLinde Consulting BV<br>v2.3.6</p>
   </div>
 </div>
 
