@@ -152,6 +152,22 @@
   .config-warning{background:var(--warning-bg);border:1px solid var(--warning-border);color:var(--warning-text);border-radius:var(--radius);padding:14px;font-size:13px;margin-bottom:1.5rem}
   a{color:var(--accent);text-decoration:none}
   a:hover{text-decoration:underline}
+
+  /* Horeca-printlijst (Admin > Indeling, knop "Horeca") — een los, in het normale
+     scherm onzichtbaar blok dat alleen bij het afdrukken zichtbaar wordt gemaakt.
+     Standaardtruc om met puur CSS maar één onderdeel van de pagina te printen: bij
+     het afdrukken wordt alles onzichtbaar gemaakt behalve dit blok, dat vervolgens
+     op de pagina wordt losgemaakt zodat de rest van de app geen witruimte achterlaat.
+     Zo hoeft er geen los venster/tabblad geopend te worden — dat is op iPad/iPhone
+     Safari onbetrouwbaar (pop-upblokkering) en is precies het soort aanname dat we
+     na de Speeldagen-velden niet meer ongetest willen doen. */
+  #horeca-print-area{display:none}
+  @media print{
+    @page{ size:A4; margin:18mm }
+    body *{ visibility:hidden }
+    #horeca-print-area, #horeca-print-area *{ visibility:visible }
+    #horeca-print-area{ display:block; position:absolute; top:0; left:0; width:100% }
+  }
 </style>
 </head>
 <body>
@@ -207,7 +223,7 @@
       </p>
     </div>
 
-    <p style="font-size:11px;color:var(--text-muted);text-align:center;margin-top:24px;line-height:1.6">&copy; 2026 VanDeLinde Consulting BV<br>v2.4.0</p>
+    <p style="font-size:11px;color:var(--text-muted);text-align:center;margin-top:24px;line-height:1.6">&copy; 2026 VanDeLinde Consulting BV<br>v2.4.1</p>
   </div>
 </div>
 
@@ -305,6 +321,8 @@
 </div>
 
 <div class="toast" id="toast"></div>
+
+<div id="horeca-print-area"></div>
 
 <div id="infoModal" class="modal-overlay hidden" onclick="if(event.target===this) sluitInfoModal()">
   <div class="modal-box">
@@ -1972,6 +1990,7 @@ async function renderAanwezigContent(){
   let html = `<div style="display:flex;gap:10px;align-items:center;margin-bottom:12px;flex-wrap:wrap">
       <input id="aanwezig-zoek-input" placeholder="Zoek een lid..." value="${aanwezigZoekTerm}" oninput="filterAanwezigZoek(this.value)" style="width:33%;min-width:160px">
       <div style="display:flex;gap:10px;margin-left:auto;flex-wrap:wrap">
+        <button class="btn" onclick="printHorecaLijst('${activeAvondAanwezigId}')">Horeca</button>
         <button class="btn btn-danger" onclick="wisIndeling('${activeAvondAanwezigId}')">Wis Indeling</button>
         <button class="btn ${gepubliceerd ? 'btn-danger-solid' : 'btn-primary'}" onclick="togglePublicatie('${activeAvondAanwezigId}')">${gepubliceerd ? 'Depubliceer Indeling' : 'Publiceer Indeling'}</button>
       </div>
@@ -2354,6 +2373,50 @@ async function togglePublicatie(avondId){
 // partners (avond_losgekoppeld) en de handmatige volgorde (avond_paar_volgorde),
 // zodat de indeler helemaal opnieuw kan beginnen. Bevestigde vaste partnerschappen
 // (leden.vaste_partner_id) blijven ongemoeid — dat is geen avondgebonden gegeven.
+// Printbare A4-lijst van iedereen die voor deze avond bij "diner" heeft aangevinkt
+// (aanwezigheid.diner === true) — losstaand van of er al paren/tafels zijn gemaakt,
+// zodat de beheerder deze lijst al vroeg in de week naar de horeca/keuken kan sturen.
+async function printHorecaLijst(avondId){
+  const avond = speelavonden.find(a=>a.id===avondId);
+  if(!avond){ toast('Geen speelavond geselecteerd'); return; }
+
+  const records = await loadAanwezigheidVoorAvond(avondId);
+  const eters = records
+    .filter(r=>r.diner===true)
+    .map(r=>leden.find(l=>l.id===r.lid_id))
+    .filter(Boolean)
+    .sort((a,b)=>a.voornaam.localeCompare(b.voornaam));
+
+  const horecaSoort = avond.horeca && avond.horeca !== 'Geen' ? avond.horeca : 'Horeca';
+  const horecaTijd = avond.horeca_tijd ? avond.horeca_tijd.slice(0,5) + ' uur' : '';
+
+  const rijenHtml = eters.length
+    ? eters.map((l,i)=>`<tr>
+        <td style="padding:7px 8px;border-bottom:1px solid #ddd;color:#666">${i+1}</td>
+        <td style="padding:7px 8px;border-bottom:1px solid #ddd">${l.voornaam} ${l.achternaam}</td>
+      </tr>`).join('')
+    : `<tr><td colspan="2" style="padding:14px 8px;color:#888;text-align:center">Geen aanmeldingen voor horeca</td></tr>`;
+
+  document.getElementById('horeca-print-area').innerHTML = `
+    <div style="font-family:Arial,Helvetica,sans-serif;color:#111">
+      <div style="font-size:20px;font-weight:800;margin-bottom:4px;color:#111">Goyer Bridge — ${horecaSoort}lijst</div>
+      <div style="font-size:14px;margin-bottom:2px">${fmtDatumVol(avond.datum)}${avond.omschrijving ? ' — ' + avond.omschrijving : ''}</div>
+      <div style="font-size:13px;color:#555;margin-bottom:18px">${horecaTijd ? horecaSoort + ' om ' + horecaTijd : horecaSoort}</div>
+      <table style="width:100%;border-collapse:collapse;font-size:14px">
+        <thead>
+          <tr>
+            <th style="text-align:left;padding:7px 8px;border-bottom:2px solid #111;width:34px">#</th>
+            <th style="text-align:left;padding:7px 8px;border-bottom:2px solid #111">Naam</th>
+          </tr>
+        </thead>
+        <tbody>${rijenHtml}</tbody>
+      </table>
+      <div style="margin-top:18px;font-size:13px;font-weight:700">Totaal: ${eters.length} perso${eters.length===1?'on':'nen'}</div>
+    </div>`;
+
+  window.print();
+}
+
 async function wisIndeling(avondId){
   if(!confirm('Alle tafel- en teamindelingen worden gewist. Weet u het zeker?')) return;
 
