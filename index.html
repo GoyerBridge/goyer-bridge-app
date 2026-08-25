@@ -38,6 +38,9 @@
   label{font-size:13px;color:var(--text-secondary);display:block;margin-bottom:4px}
   input:not([type="checkbox"]),select{width:100%;height:41px;border:1px solid var(--border-strong);border-radius:var(--radius);padding:0 12px;font-size:15px;background:var(--surface);color:var(--text)}
   input:focus,select:focus{outline:none;border-color:var(--accent)}
+  /* iOS Safari tekent de tekst in native datum-/tijdvelden gecentreerd i.p.v.
+     links (Chrome doet dit wel links); dit forceert links uitlijnen overal. */
+  input[type="date"],input[type="time"]{text-align:left}
   .btn{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--border-strong);background:var(--surface);padding:9px 16px;border-radius:var(--radius);cursor:pointer;font-size:14px;color:var(--text)}
   .btn:hover{background:var(--bg)}
   .btn-primary{background:var(--accent);color:#fff;border-color:var(--accent);box-shadow:0 2px 6px rgba(29,111,92,0.25)}
@@ -59,7 +62,7 @@
   .row-nowrap-scroll{flex-wrap:nowrap;overflow-x:auto;-webkit-overflow-scrolling:touch;gap:16px;padding-bottom:4px}
   .row-nowrap-scroll > *{flex-shrink:0}
   .table-scroll{overflow-x:auto;-webkit-overflow-scrolling:touch;margin:0 -1px;max-height:65vh;overflow-y:auto}
-  table.responsive-table{table-layout:fixed;width:1110px}
+  table.responsive-table{table-layout:fixed;width:1200px}
   .error-msg{color:var(--danger-text);font-size:13px;margin-top:8px}
   .nav{
     position:fixed;left:0;right:0;bottom:0;z-index:500;
@@ -191,7 +194,7 @@
       </p>
     </div>
 
-    <p style="font-size:11px;color:var(--text-muted);text-align:center;margin-top:24px;line-height:1.6">&copy; 2026 VanDeLinde Consulting BV<br>v2.3.2</p>
+    <p style="font-size:11px;color:var(--text-muted);text-align:center;margin-top:24px;line-height:1.6">&copy; 2026 VanDeLinde Consulting BV<br>v2.3.3</p>
   </div>
 </div>
 
@@ -247,12 +250,12 @@
     <div class="card">
       <div style="font-weight:600;margin-bottom:12px">Nieuwe speelavond toevoegen</div>
       <div class="row row-nowrap-scroll" style="margin-bottom:10px">
-        <div style="flex:0 0 160px"><label>Datum</label><input type="date" id="new-avond-datum"></div>
-        <div style="flex:0 0 120px"><label>Aanvangstijd</label><input type="time" id="new-avond-tijd" value="19:15"></div>
+        <div style="flex:0 0 200px"><label>Datum</label><input type="date" id="new-avond-datum"></div>
+        <div style="flex:0 0 160px"><label>Aanvangstijd</label><input type="time" id="new-avond-tijd" value="19:15"></div>
         <div style="flex:1 0 260px"><label>Event</label><input id="new-avond-omschrijving" placeholder="bv. Kerstdrive" maxlength="40"></div>
       </div>
       <div class="row row-nowrap-scroll" style="margin-bottom:10px">
-        <div style="flex:0 0 110px"><label>Horeca</label>
+        <div style="flex:0 0 170px"><label>Horeca</label>
           <select id="new-avond-horeca" onchange="toggleNieuweHorecaAnders()">
             <option value="Geen">Geen</option>
             <option value="Diner" selected>Diner</option>
@@ -260,7 +263,7 @@
             <option value="Anders">Anders (vul in)</option>
           </select>
         </div>
-        <div style="flex:0 0 120px"><label>Tijd</label><input type="time" id="new-avond-horeca-tijd" value="18:00"></div>
+        <div style="flex:0 0 160px"><label>Tijd</label><input type="time" id="new-avond-horeca-tijd" value="18:00"></div>
         <div id="new-avond-horeca-anders-wrap" class="hidden" style="flex:0 0 220px"><label>Horeca (vul in)</label><input id="new-avond-horeca-anders" placeholder="bv. Borrel met bitterballen" maxlength="40"></div>
       </div>
       <div class="form-group">
@@ -275,7 +278,7 @@
     <p class="sub avonden-sticky-label">Wijzigingen in de tabel worden direct opgeslagen.</p>
     <table class="responsive-table">
       <colgroup>
-        <col style="width:160px"><col style="width:150px"><col style="width:190px"><col style="width:190px"><col style="width:150px"><col style="width:150px"><col style="width:120px">
+        <col style="width:200px"><col style="width:160px"><col style="width:190px"><col style="width:190px"><col style="width:170px"><col style="width:160px"><col style="width:130px">
       </colgroup>
       <thead><tr><th>Datum</th><th>Bridge Tijd</th><th>Event</th><th>Omschrijving</th><th>Horeca</th><th>Horeca-tijd</th><th></th></tr></thead>
       <tbody id="avonden-tbody"></tbody>
