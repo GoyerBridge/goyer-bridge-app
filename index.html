@@ -207,7 +207,7 @@
       </p>
     </div>
 
-    <p style="font-size:11px;color:var(--text-muted);text-align:center;margin-top:24px;line-height:1.6">&copy; 2026 VanDeLinde Consulting BV<br>v2.3.7</p>
+    <p style="font-size:11px;color:var(--text-muted);text-align:center;margin-top:24px;line-height:1.6">&copy; 2026 VanDeLinde Consulting BV<br>v2.4.0</p>
   </div>
 </div>
 
@@ -1946,7 +1946,16 @@ async function renderAanwezigContent(){
   parenVolgordeRows.forEach(r=>{ volgordeMap[r.paar_key] = r.volgorde; });
   paarLedenLookup = {};
   const recordMap = {};
-  records.forEach(r=>{ recordMap[r.lid_id] = r.aanwezig; });
+  const dinerMap = {};
+  records.forEach(r=>{ recordMap[r.lid_id] = r.aanwezig; dinerMap[r.lid_id] = r.diner; });
+  // Klein bestek-icoontje bij elke aangemelde speler in de tafelindeling: groen als de
+  // speler mee-eet (horeca), rood als niet. De beheerder kan er zelf op klikken om dit
+  // om te zetten (bv. na een mailtje "ik blijf toch niet eten"), met een pop-up
+  // waarschuwing om per ongeluk klikken te voorkomen.
+  const horecaIconHtml = (lidId) => {
+    const eet = dinerMap[lidId] === true;
+    return `<span class="horeca-icoon" style="cursor:pointer;flex-shrink:0;display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;border-radius:50%;font-size:12px;background:${eet ? 'var(--success-bg)' : 'var(--danger-bg)'};color:${eet ? 'var(--success-text)' : 'var(--danger-text)'}" onclick="event.stopPropagation();toggleHoreca('${lidId}')" title="${eet ? 'Eet mee — klik om af te melden voor de horeca' : 'Eet niet mee — klik om aan te melden voor de horeca'}">🍴</span>`;
+  };
 
   const groepen = { aangemeld: [], afgemeld: [], nogNiet: [] };
   leden.forEach(l=>{
@@ -2105,6 +2114,7 @@ async function renderAanwezigContent(){
                   <div class="avatar" style="background:var(--success-bg);color:var(--success-text);cursor:pointer" onclick="bevestigUitschrijven('${persoon.id}')" title="Klik om deze speler uit te schrijven">${initialenVan(persoon.id)}</div>
                   <span style="flex:1">${persoon.voornaam} ${persoon.achternaam}</span>
                   <span style="color:var(--text-secondary);font-size:12px">${persoon.speelsterkte ? persoon.speelsterkte + ' / ' : ''}${sterkteRangVan(persoon.id) ?? ''}</span>
+                  ${horecaIconHtml(persoon.id)}
                   <span class="drag-handle losse-lid-drag" title="${isVoorstel ? 'Sleep om deze speler los te koppelen of opnieuw te koppelen' : 'Sleep om deze speler los te koppelen van de vaste partner voor deze avond'}">⠿</span>
                 </div>`;
             return `<div class="paar-kaart" data-paar-key="${p.paarKey}">
@@ -2167,6 +2177,7 @@ async function renderAanwezigContent(){
                 <span style="flex:1">${l.voornaam} ${l.achternaam}</span>
                 ${isLosgekoppeld ? `<span class="badge badge-warning" title="Losgekoppeld van vaste partner voor deze avond">los van vaste partner</span>` : ''}
                 <span style="color:var(--text-secondary);font-size:12px">${g ? g + ' / ' : ''}${sterkteRangVan(l.id) ?? ''}</span>
+                ${horecaIconHtml(l.id)}
                 <span class="drag-handle losse-lid-drag" title="Sleep om te koppelen">⠿</span>
               </div>
               <div class="pair-row" style="flex:1;min-width:180px;margin-bottom:0;min-height:32px">
@@ -2279,6 +2290,21 @@ function sluitInfoModal(){
 function bevestigUitschrijven(lidId){
   if(!confirm('Weet u zeker dat u deze speler wilt uitschrijven?')) return;
   setAanwezig(activeAvondAanwezigId, lidId, false);
+}
+
+// Beheerder kan in de tafelindeling per speler de horeca-aanmelding omzetten (bv. na
+// een mailtje "ik blijf toch niet eten") — altijd met een pop-up waarschuwing, om een
+// per-ongeluk-klik te voorkomen.
+async function toggleHoreca(lidId){
+  const bestaand = (aanwezigheidCache[activeAvondAanwezigId] || []).find(r=>r.lid_id===lidId);
+  const eetNu = bestaand?.diner === true;
+  const lid = leden.find(l=>l.id===lidId);
+  const naam = lid ? `${lid.voornaam} ${lid.achternaam}` : 'deze speler';
+  const vraag = eetNu
+    ? `${naam} afmelden voor de horeca (eet niet meer mee)?`
+    : `${naam} aanmelden voor de horeca (eet mee)?`;
+  if(!confirm(vraag)) return;
+  await setDiner(activeAvondAanwezigId, lidId, !eetNu);
 }
 
 // Bepaalt welke aangemelde spelers voor deze avond nog niet aan een tafel zitten
