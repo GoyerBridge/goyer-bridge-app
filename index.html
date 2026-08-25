@@ -38,17 +38,15 @@
   label{font-size:13px;color:var(--text-secondary);display:block;margin-bottom:4px}
   input:not([type="checkbox"]),select{width:100%;height:41px;border:1px solid var(--border-strong);border-radius:var(--radius);padding:0 12px;font-size:15px;background:var(--surface);color:var(--text)}
   input:focus,select:focus{outline:none;border-color:var(--accent)}
-  /* iOS Safari tekent de tekst in native datum-/tijdvelden gecentreerd i.p.v.
-     links (Chrome doet dit wel links); dit forceert links uitlijnen overal.
-     (Op echte iPhone/iPad bleek dit niet altijd effect te hebben op het
-     interne, door iOS zelf getekende deel van het veld — zie hieronder.)
-     Daarnaast: iOS Safari's native datum-/tijdveld tekent zijn eigen
-     "chrome" soms breder dan de CSS-breedte van het veld toelaat, waardoor
-     het zichtbaar over het volgende veld heen loopt — ongeacht hoeveel
-     ruimte (gap/margin) daartussen staat. overflow:hidden op het veld zelf
-     knipt dat teveel weg, zodat het veld nooit buiten zijn eigen kader
-     kan tekenen. */
-  input[type="date"],input[type="time"]{text-align:left;overflow:hidden}
+  /* De Datum/Tijd-velden bij Speeldagen zijn GEEN native <input type="date"/"time">
+     meer (zie .veld-datumtijd hieronder) — dat gaf op iPhone/iPad Safari een
+     hardnekkig weergaveprobleem (velden die zichtbaar tegen elkaar aan
+     plakten) dat op geen enkele manier met CSS (breedte, gap, margin,
+     text-align, overflow:hidden) op te lossen bleek, zelfs niet na bevestigd
+     cache-vrij testen. Het zijn nu gewone tekstvelden met een eigen
+     invoermasker (dd-mm-jjjj / uu:mm) — dat geven we volledige controle over
+     het uiterlijk, ten koste van het native iOS-kalenderblaadje/klokwieltje. */
+  .veld-datumtijd{font-variant-numeric:tabular-nums;letter-spacing:0.3px}
   .btn{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--border-strong);background:var(--surface);padding:9px 16px;border-radius:var(--radius);cursor:pointer;font-size:14px;color:var(--text)}
   .btn:hover{background:var(--bg)}
   .btn-primary{background:var(--accent);color:#fff;border-color:var(--accent);box-shadow:0 2px 6px rgba(29,111,92,0.25)}
@@ -209,7 +207,7 @@
       </p>
     </div>
 
-    <p style="font-size:11px;color:var(--text-muted);text-align:center;margin-top:24px;line-height:1.6">&copy; 2026 VanDeLinde Consulting BV<br>v2.3.6</p>
+    <p style="font-size:11px;color:var(--text-muted);text-align:center;margin-top:24px;line-height:1.6">&copy; 2026 VanDeLinde Consulting BV<br>v2.3.7</p>
   </div>
 </div>
 
@@ -265,8 +263,8 @@
     <div class="card">
       <div style="font-weight:600;margin-bottom:12px">Nieuwe speelavond toevoegen</div>
       <div class="row row-nowrap-scroll" style="margin-bottom:10px">
-        <div style="flex:0 0 200px"><label>Datum</label><input type="date" id="new-avond-datum"></div>
-        <div style="flex:0 0 160px"><label>Aanvangstijd</label><input type="time" id="new-avond-tijd" value="19:15"></div>
+        <div style="flex:0 0 200px"><label>Datum</label><input type="text" inputmode="numeric" class="veld-datumtijd" placeholder="dd-mm-jjjj" maxlength="10" id="new-avond-datum" oninput="maskDatumInput(this)"></div>
+        <div style="flex:0 0 160px"><label>Aanvangstijd</label><input type="text" inputmode="numeric" class="veld-datumtijd" placeholder="uu:mm" maxlength="5" id="new-avond-tijd" value="19:15" oninput="maskTijdInput(this)"></div>
         <div style="flex:1 0 260px"><label>Event</label><input id="new-avond-omschrijving" placeholder="bv. Kerstdrive" maxlength="40"></div>
       </div>
       <div class="row row-nowrap-scroll" style="margin-bottom:10px">
@@ -278,7 +276,7 @@
             <option value="Anders">Anders (vul in)</option>
           </select>
         </div>
-        <div style="flex:0 0 160px"><label>Tijd</label><input type="time" id="new-avond-horeca-tijd" value="18:00"></div>
+        <div style="flex:0 0 160px"><label>Tijd</label><input type="text" inputmode="numeric" class="veld-datumtijd" placeholder="uu:mm" maxlength="5" id="new-avond-horeca-tijd" value="18:00" oninput="maskTijdInput(this)"></div>
         <div id="new-avond-horeca-anders-wrap" class="hidden" style="flex:0 0 220px"><label>Horeca (vul in)</label><input id="new-avond-horeca-anders" placeholder="bv. Borrel met bitterballen" maxlength="40"></div>
       </div>
       <div class="form-group">
@@ -2364,8 +2362,8 @@ function renderAvonden(){
   sorted.forEach(a=>{
     const open = avondenBijzonderhedenOpen.has(a.id);
     tbody.innerHTML += `<tr>
-      <td data-label="Datum"><input type="date" value="${a.datum}" onchange="updateAvondField('${a.id}','datum',this.value)"></td>
-      <td data-label="Bridge Tijd"><input type="time" value="${(a.aanvangstijd||'').slice(0,5)}" onchange="updateAvondField('${a.id}','aanvangstijd',this.value || null)"></td>
+      <td data-label="Datum"><input type="text" inputmode="numeric" class="veld-datumtijd" placeholder="dd-mm-jjjj" maxlength="10" value="${isoToDisplayDatum(a.datum)}" oninput="maskDatumInput(this)" onchange="handleAvondDatumChange(this,'${a.id}')"></td>
+      <td data-label="Bridge Tijd"><input type="text" inputmode="numeric" class="veld-datumtijd" placeholder="uu:mm" maxlength="5" value="${(a.aanvangstijd||'').slice(0,5)}" oninput="maskTijdInput(this)" onchange="handleAvondTijdChange(this,'${a.id}','aanvangstijd')"></td>
       <td data-label="Event"><input value="${a.omschrijving || ''}" style="min-width:150px" maxlength="40" onchange="updateAvondField('${a.id}','omschrijving',this.value || null)"></td>
       <td data-label="Omschrijving">${open ? `
         <textarea rows="3" style="width:100%;min-width:170px;font-family:inherit;font-size:15px;padding:10px 12px;border:1px solid var(--border-strong);border-radius:var(--radius);background:var(--surface);color:var(--text)" onchange="updateAvondField('${a.id}','bijzonderheden',this.value || null)">${a.bijzonderheden || ''}</textarea>
@@ -2386,7 +2384,7 @@ function renderAvonden(){
         <option value="Anders" ${isAnders?'selected':''}>Anders (vul in)</option>
       </select>${isAnders ? `<input value="${a.horeca==='Anders' ? '' : a.horeca}" placeholder="Omschrijving" style="margin-top:6px;width:100%" onchange="updateAvondField('${a.id}','horeca',this.value.trim() || 'Anders')">` : ''}`;
       })()}</td>
-      <td data-label="Horeca-tijd"><input type="time" value="${(a.horeca_tijd||'').slice(0,5)}" onchange="updateAvondField('${a.id}','horeca_tijd',this.value || null)"></td>
+      <td data-label="Horeca-tijd"><input type="text" inputmode="numeric" class="veld-datumtijd" placeholder="uu:mm" maxlength="5" value="${(a.horeca_tijd||'').slice(0,5)}" oninput="maskTijdInput(this)" onchange="handleAvondTijdChange(this,'${a.id}','horeca_tijd')"></td>
       <td><button class="btn btn-sm btn-danger" style="width:100%;justify-content:center" onclick="removeAvond('${a.id}')">Verwijderen</button></td>
     </tr>`;
   });
@@ -2397,6 +2395,83 @@ function toggleAvondBijzonderheden(id){
   if(avondenBijzonderhedenOpen.has(id)) avondenBijzonderhedenOpen.delete(id);
   else avondenBijzonderhedenOpen.add(id);
   renderAvonden();
+}
+
+// ===========================================================
+// DATUM/TIJD-INVOERMASKER (vervangt native <input type="date"/"time">)
+// Zie het CSS-commentaar bij .veld-datumtijd voor de aanleiding.
+// ===========================================================
+function maskInvoer(el, groepen, scheidingsteken){
+  const cijfersVoorCursor = el.value.slice(0, el.selectionStart).replace(/\D/g,'').length;
+  const totaalCijfers = groepen.reduce((a,b)=>a+b,0);
+  const cijfers = el.value.replace(/\D/g,'').slice(0, totaalCijfers);
+  let out = '', idx = 0;
+  groepen.forEach((len,i)=>{
+    if(cijfers.length > idx){
+      if(i>0) out += scheidingsteken;
+      out += cijfers.slice(idx, idx+len);
+    }
+    idx += len;
+  });
+  el.value = out;
+  let pos = 0, dcount = 0;
+  while(pos < out.length && dcount < cijfersVoorCursor){
+    if(/\d/.test(out[pos])) dcount++;
+    pos++;
+  }
+  el.setSelectionRange(pos, pos);
+}
+function maskDatumInput(el){ maskInvoer(el, [2,2,4], '-'); }
+function maskTijdInput(el){ maskInvoer(el, [2,2], ':'); }
+
+function parseDisplayDatum(display){
+  const m = /^(\d{2})-(\d{2})-(\d{4})$/.exec((display||'').trim());
+  if(!m) return null;
+  const dd = parseInt(m[1],10), mm = parseInt(m[2],10), yyyy = parseInt(m[3],10);
+  if(mm<1||mm>12||yyyy<2000||yyyy>2099) return null;
+  const dagenInMaand = new Date(yyyy, mm, 0).getDate();
+  if(dd<1||dd>dagenInMaand) return null;
+  return `${yyyy}-${String(mm).padStart(2,'0')}-${String(dd).padStart(2,'0')}`;
+}
+function isoToDisplayDatum(iso){
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(iso||'');
+  return m ? `${m[3]}-${m[2]}-${m[1]}` : '';
+}
+function parseDisplayTijd(display){
+  const m = /^(\d{2}):(\d{2})$/.exec((display||'').trim());
+  if(!m) return null;
+  const hh = parseInt(m[1],10), mm = parseInt(m[2],10);
+  if(hh<0||hh>23||mm<0||mm>59) return null;
+  return `${String(hh).padStart(2,'0')}:${String(mm).padStart(2,'0')}`;
+}
+function flashOngeldigVeld(el){
+  el.style.borderColor = 'var(--danger-text, #c0392b)';
+  setTimeout(()=>{ el.style.borderColor = ''; }, 1200);
+}
+function handleAvondDatumChange(el, id){
+  const iso = parseDisplayDatum(el.value);
+  if(!iso){
+    const a = speelavonden.find(x=>x.id===id);
+    el.value = isoToDisplayDatum(a && a.datum);
+    flashOngeldigVeld(el);
+    return;
+  }
+  updateAvondField(id, 'datum', iso);
+}
+function handleAvondTijdChange(el, id, field){
+  const trimmed = el.value.trim();
+  if(!trimmed){
+    updateAvondField(id, field, null);
+    return;
+  }
+  const tijd = parseDisplayTijd(trimmed);
+  if(!tijd){
+    const a = speelavonden.find(x=>x.id===id);
+    el.value = ((a && a[field]) || '').slice(0,5);
+    flashOngeldigVeld(el);
+    return;
+  }
+  updateAvondField(id, field, tijd);
 }
 
 async function updateAvondField(id, field, value){
@@ -2418,19 +2493,32 @@ function toggleNieuweHorecaAnders(){
 }
 
 async function addAvond(){
-  const datum = document.getElementById('new-avond-datum').value;
-  const aanvangstijd = document.getElementById('new-avond-tijd').value || null;
+  const datumDisplay = document.getElementById('new-avond-datum').value.trim();
+  const datum = parseDisplayDatum(datumDisplay);
+  const aanvangstijdDisplay = document.getElementById('new-avond-tijd').value.trim();
+  const aanvangstijd = aanvangstijdDisplay ? parseDisplayTijd(aanvangstijdDisplay) : null;
   const omschrijving = document.getElementById('new-avond-omschrijving').value.trim();
   const horecaSelect = document.getElementById('new-avond-horeca').value;
   const horecaAnders = document.getElementById('new-avond-horeca-anders').value.trim();
   const horeca = horecaSelect === 'Anders' ? (horecaAnders || 'Anders') : horecaSelect;
-  const horecaTijd = document.getElementById('new-avond-horeca-tijd').value || null;
+  const horecaTijdDisplay = document.getElementById('new-avond-horeca-tijd').value.trim();
+  const horecaTijd = horecaTijdDisplay ? parseDisplayTijd(horecaTijdDisplay) : null;
   const bijzonderheden = document.getElementById('new-avond-bijzonderheden').value.trim();
   const errEl = document.getElementById('avonden-error');
   errEl.classList.add('hidden');
 
-  if(!datum){
-    errEl.textContent = 'Kies een datum.';
+  if(!datumDisplay || !datum){
+    errEl.textContent = 'Vul een geldige datum in (dd-mm-jjjj).';
+    errEl.classList.remove('hidden');
+    return;
+  }
+  if(aanvangstijdDisplay && !aanvangstijd){
+    errEl.textContent = 'Vul een geldige aanvangstijd in (uu:mm).';
+    errEl.classList.remove('hidden');
+    return;
+  }
+  if(horecaTijdDisplay && !horecaTijd){
+    errEl.textContent = 'Vul een geldige horeca-tijd in (uu:mm).';
     errEl.classList.remove('hidden');
     return;
   }
