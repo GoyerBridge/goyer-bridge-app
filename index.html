@@ -194,7 +194,7 @@
       </p>
     </div>
 
-    <p style="font-size:11px;color:var(--text-muted);text-align:center;margin-top:24px;line-height:1.6">&copy; 2026 VanDeLinde Consulting BV<br>v2.3.3</p>
+    <p style="font-size:11px;color:var(--text-muted);text-align:center;margin-top:24px;line-height:1.6">&copy; 2026 VanDeLinde Consulting BV<br>v2.3.4</p>
   </div>
 </div>
 
@@ -249,6 +249,8 @@
   <div id="avondenPage" class="page">
     <div class="card">
       <div style="font-weight:600;margin-bottom:12px">Nieuwe speelavond toevoegen</div>
+      <pre id="veld-debug-info" style="font-size:11px;color:#a3372b;background:#fbeae8;border:1px dashed #f0c4bd;padding:8px;border-radius:6px;margin-bottom:10px;white-space:pre-wrap;font-family:monospace">(meet veldbreedtes...)</pre>
+      <p class="sub" style="margin-bottom:10px;color:#a3372b">↑ Tijdelijk blokje voor foutopsporing — verdwijnt weer zodra we de juiste breedtes weten. Kun je hier een screenshot van sturen?</p>
       <div class="row row-nowrap-scroll" style="margin-bottom:10px">
         <div style="flex:0 0 200px"><label>Datum</label><input type="date" id="new-avond-datum"></div>
         <div style="flex:0 0 160px"><label>Aanvangstijd</label><input type="time" id="new-avond-tijd" value="19:15"></div>
@@ -2375,6 +2377,41 @@ function renderAvonden(){
       <td><button class="btn btn-sm btn-danger" style="width:100%;justify-content:center" onclick="removeAvond('${a.id}')">Verwijderen</button></td>
     </tr>`;
   });
+  requestAnimationFrame(toonVeldDebugInfo);
+}
+
+// TIJDELIJK — meet de werkelijke gerenderde breedte van de datum/tijd-velden
+// vs. de breedte die hun inhoud (native Safari-widget) echt nodig heeft, zodat
+// we op basis van eerlijke cijfers i.p.v. gokken de juiste breedte kunnen
+// kiezen. Wordt weer verwijderd zodra dit is opgelost.
+function toonVeldDebugInfo(){
+  const box = document.getElementById('veld-debug-info');
+  if(!box) return;
+  const lines = [];
+  const meet = (label, el) => {
+    if(!el){ lines.push(`${label}: niet gevonden`); return; }
+    const r = el.getBoundingClientRect();
+    const boxW = Math.round(r.width);
+    const inhoudW = el.scrollWidth;
+    const teKrap = inhoudW > boxW ? `  ⚠️ inhoud is ${inhoudW - boxW}px breder dan de box` : '';
+    lines.push(`${label}: box=${boxW}px, inhoud=${inhoudW}px${teKrap}`);
+  };
+  lines.push('— Formulier —');
+  meet('Datum', document.getElementById('new-avond-datum'));
+  meet('Aanvangstijd', document.getElementById('new-avond-tijd'));
+  meet('Horeca (select)', document.getElementById('new-avond-horeca'));
+  meet('Tijd', document.getElementById('new-avond-horeca-tijd'));
+  const tbody = document.getElementById('avonden-tbody');
+  const eersteRij = tbody ? tbody.querySelector('tr') : null;
+  if(eersteRij && eersteRij.cells.length >= 7){
+    lines.push('— Eerste rij in de tabel —');
+    const labels = ['Datum','Bridge Tijd','Event','Omschrijving','Horeca','Horeca-tijd','Verwijderen'];
+    Array.from(eersteRij.cells).forEach((cel, i) => {
+      const veld = cel.querySelector('input,select,button') || cel;
+      meet(labels[i] || `kolom ${i}`, veld);
+    });
+  }
+  box.textContent = lines.join('\n');
 }
 
 let avondenBijzonderhedenOpen = new Set();
