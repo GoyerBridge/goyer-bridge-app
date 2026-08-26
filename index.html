@@ -316,6 +316,11 @@
     </div>
   </div>
 
+  <!-- ADMIN (admin) -->
+  <div id="adminPage" class="page">
+    <div id="admin-content"></div>
+  </div>
+
 </div>
 
 </div>
@@ -351,6 +356,7 @@ const db = createClient(SUPABASE_URL, SUPABASE_KEY);
 let currentUser = null;
 let leden = [];
 let speelavonden = [];
+let instellingen = {};
 let activeAvondAanwezigId = null;
 let aanwezigheidCache = {};
 
@@ -468,7 +474,7 @@ async function adminLogin(){
     return;
   }
 
-  currentUser = { id: null, voornaam: 'Beheerder', achternaam: '', is_admin: true };
+  currentUser = { id: null, voornaam: 'Beheerder', achternaam: '', is_admin: true, gebruikersnaam: data.gebruikersnaam };
   sessionStorage.setItem('goyer_bridge_user', JSON.stringify(currentUser));
   await initApp();
 }
@@ -514,9 +520,10 @@ function renderNav(){
   if(isAdmin){
     html = `
       <button class="nav-btn active" data-page="aanwezigPage" onclick="showPage('aanwezigPage')"><span class="ic">🪑</span><span class="lbl">Indeling</span></button>
-      <button class="nav-btn" data-page="ledenPage" onclick="showPage('ledenPage')"><span class="ic">👤</span><span class="lbl">Profiel</span></button>
+      <button class="nav-btn" data-page="ledenPage" onclick="showPage('ledenPage')"><span class="ic">👤</span><span class="lbl">Leden</span></button>
       <button class="nav-btn" data-page="sterktePage" onclick="showPage('sterktePage')"><span class="ic">📊</span><span class="lbl">Sterktelijst</span></button>
-      <button class="nav-btn" data-page="avondenPage" onclick="showPage('avondenPage')"><span class="ic">🗓️</span><span class="lbl">Speeldagen</span></button>`;
+      <button class="nav-btn" data-page="avondenPage" onclick="showPage('avondenPage')"><span class="ic">🗓️</span><span class="lbl">Speeldagen</span></button>
+      <button class="nav-btn" data-page="adminPage" onclick="showPage('adminPage')"><span class="ic">⚙️</span><span class="lbl">Admin</span></button>`;
   } else {
     html = `
       <button class="nav-btn active" data-page="indelingPage" onclick="showPage('indelingPage')"><span class="ic">🪑</span><span class="lbl">Indeling</span></button>
@@ -538,6 +545,7 @@ function showPage(id){
   if(id==='aanwezigPage') renderAanwezigPills();
   if(id==='avondenPage') renderAvonden();
   if(id==='indelingPage') renderIndelingContent();
+  if(id==='adminPage') renderAdminPagina();
 
   if(id==='indelingPage') startIndelingPolling();
   else stopIndelingPolling();
@@ -730,15 +738,24 @@ function renderLeden(){
     return true;
   });
 
-  let html = `
-    <div class="card">
-      <div style="display:flex;justify-content:space-between;align-items:center;${nieuwLidOpen?'margin-bottom:12px':''}">
-        <div style="font-weight:600">Nieuw lid toevoegen</div>
-        <button class="btn btn-sm" onclick="toggleNieuwLidForm()">${nieuwLidOpen ? '−' : '+'}</button>
-      </div>`;
+  let html = `<div class="row" style="margin-bottom:14px;align-items:flex-end">
+    <div style="flex:0 1 220px"><input id="leden-zoek-input" placeholder="Zoek een lid..." value="${ledenZoekTerm}" oninput="filterLedenZoek(this.value)"></div>
+    <div style="flex:0 0 170px">
+      <select id="leden-actie-select" onchange="handleLedenActie(this.value)">
+        <option value="">Acties...</option>
+        <option value="nieuw">Nieuw Lid</option>
+        <option value="mail">Mail Leden</option>
+      </select>
+    </div>
+  </div>`;
 
   if(nieuwLidOpen){
     html += `
+    <div class="card" style="margin-bottom:14px">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+        <div style="font-weight:600">Nieuw lid toevoegen</div>
+        <button class="btn btn-sm" onclick="toggleNieuwLidForm()">Annuleren</button>
+      </div>
       <div class="row" style="margin-bottom:10px">
         <div><label>Voornaam</label><input id="new-voornaam"></div>
         <div><label>Achternaam</label><input id="new-achternaam"></div>
@@ -763,13 +780,9 @@ function renderLeden(){
         <label>Opmerkingen</label><input id="new-opmerkingen">
       </div>
       <button class="btn btn-primary" onclick="addLid()">Toevoegen</button>
-      <p id="leden-error" class="error-msg hidden"></p>`;
+      <p id="leden-error" class="error-msg hidden"></p>
+    </div>`;
   }
-  html += `</div>`;
-
-  html += `<div class="form-group">
-    <input id="leden-zoek-input" placeholder="Zoek een lid..." value="${ledenZoekTerm}" oninput="filterLedenZoek(this.value)">
-  </div>`;
 
   html += `<div class="row" style="margin-bottom:6px">
     <div><label>Status</label>
@@ -1093,6 +1106,22 @@ function stuurBetaalherinnering(id){
 function toggleNieuwLidForm(){
   nieuwLidOpen = !nieuwLidOpen;
   renderLeden();
+}
+
+// Acties-dropdown boven de ledenlijst (vervangt de vroegere "+"-knop). "mail"
+// is nog een stub — het daadwerkelijk versturen van een mail aan de op dat
+// moment zichtbare/gefilterde leden volgt in een latere stap.
+function handleLedenActie(actie){
+  const select = document.getElementById('leden-actie-select');
+  if(actie === 'nieuw'){
+    nieuwLidOpen = true;
+    renderLeden();
+    return;
+  }
+  if(actie === 'mail'){
+    toast('Mail Leden volgt in een latere stap');
+  }
+  if(select) select.value = '';
 }
 
 async function updateLidField(id, field, value){
@@ -1989,10 +2018,14 @@ async function renderAanwezigContent(){
   const gepubliceerd = !!avond?.gepubliceerd;
   let html = `<div style="display:flex;gap:10px;align-items:center;margin-bottom:12px;flex-wrap:wrap">
       <input id="aanwezig-zoek-input" placeholder="Zoek een lid..." value="${aanwezigZoekTerm}" oninput="filterAanwezigZoek(this.value)" style="width:33%;min-width:160px">
-      <div style="display:flex;gap:10px;margin-left:auto;flex-wrap:wrap">
-        <button class="btn" onclick="printHorecaLijst('${activeAvondAanwezigId}')">Horeca</button>
-        <button class="btn btn-danger" onclick="wisIndeling('${activeAvondAanwezigId}')">Wis Indeling</button>
-        <button class="btn ${gepubliceerd ? 'btn-danger-solid' : 'btn-primary'}" onclick="togglePublicatie('${activeAvondAanwezigId}')">${gepubliceerd ? 'Depubliceer Indeling' : 'Publiceer Indeling'}</button>
+      <div style="margin-left:auto">
+        <select id="indeling-actie-select" style="min-width:200px" onchange="handleIndelingActie(this.value, '${activeAvondAanwezigId}')">
+          <option value="">Acties...</option>
+          <option value="publiceer">${gepubliceerd ? 'Depubliceer Indeling' : 'Publiceer Indeling'}</option>
+          <option value="mail">Mail Indeling</option>
+          <option value="wis">Wis Indeling</option>
+          <option value="horeca">Horeca Overzicht</option>
+        </select>
       </div>
     </div>`;
 
@@ -2437,6 +2470,18 @@ async function wisIndeling(avondId){
   toast('Indeling gewist');
 }
 
+// Wordt aangeroepen vanuit de acties-dropdown boven de tafelindeling (in plaats
+// van vier losse knoppen). "mail" is nog een stub — het daadwerkelijk versturen
+// van de indeling per mail volgt in een latere stap.
+function handleIndelingActie(actie, avondId){
+  if(actie === 'publiceer') togglePublicatie(avondId);
+  else if(actie === 'wis') wisIndeling(avondId);
+  else if(actie === 'horeca') printHorecaLijst(avondId);
+  else if(actie === 'mail') toast('Mail Indeling volgt in een latere stap');
+  const select = document.getElementById('indeling-actie-select');
+  if(select) select.value = '';
+}
+
 // ===========================================================
 // SPEELAVONDEN (admin)
 // ===========================================================
@@ -2658,6 +2703,88 @@ async function removeAvond(id){
   await loadSpeelavonden();
   renderAvonden();
   toast('Speelavond verwijderd');
+}
+
+// ===========================================================
+// ADMIN (instellingen)
+// ===========================================================
+// Kleine key/waarde-tabel voor algemene instellingen die niet bij een
+// specifieke speelavond horen. Voor nu alleen het e-mailadres van de horeca
+// (bv. de keuken van De Goyer); later kunnen hier meer instellingen bij.
+async function renderAdminPagina(){
+  const c = document.getElementById('admin-content');
+  c.innerHTML = '<div class="empty">Laden...</div>';
+
+  const { data, error } = await db.from('instellingen').select('*');
+  if(!error && data){
+    instellingen = {};
+    data.forEach(r=>{ instellingen[r.sleutel] = r.waarde; });
+  }
+  const horecaEmail = instellingen.horeca_email || '';
+
+  c.innerHTML = `
+    <div class="card" style="max-width:560px">
+      <div style="font-weight:600;margin-bottom:4px">E-mailadres horeca</div>
+      <p class="sub" style="margin-bottom:12px">Het adres waar horeca-overzichten naartoe gaan (bv. de keuken van De Goyer), zodra het versturen per mail is ingericht.</p>
+      <div class="row">
+        <div style="flex:1"><input id="admin-horeca-email" type="email" placeholder="bv. keuken@degoyer.nl" value="${horecaEmail}"></div>
+        <div style="display:flex"><button class="btn btn-primary" style="width:100%;justify-content:center" onclick="opslaanHorecaEmail()">Opslaan</button></div>
+      </div>
+      <p id="horeca-email-error" class="error-msg hidden"></p>
+    </div>
+
+    <div class="card" style="max-width:560px">
+      <div style="font-weight:600;margin-bottom:4px">Wachtwoord admin-login wijzigen</div>
+      <p class="sub" style="margin-bottom:12px">Dit is het wachtwoord waarmee wordt ingelogd als beheerder (gebruikersnaam "${currentUser.gebruikersnaam || 'Admin'}").</p>
+      <div class="row">
+        <div style="flex:1"><input id="admin-nieuw-wachtwoord" type="password" autocomplete="off" placeholder="Nieuw wachtwoord"></div>
+        <div style="display:flex"><button class="btn btn-primary" style="width:100%;justify-content:center" onclick="wijzigAdminWachtwoord()">Opslaan</button></div>
+      </div>
+      <p id="admin-wachtwoord-error" class="error-msg hidden"></p>
+    </div>`;
+}
+
+async function opslaanHorecaEmail(){
+  const waarde = document.getElementById('admin-horeca-email').value.trim();
+  const errEl = document.getElementById('horeca-email-error');
+  errEl.classList.add('hidden');
+
+  if(waarde && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(waarde)){
+    errEl.textContent = 'Vul een geldig e-mailadres in (of laat het veld leeg).';
+    errEl.classList.remove('hidden');
+    return;
+  }
+
+  const { error } = await db.from('instellingen').upsert({ sleutel: 'horeca_email', waarde: waarde || null });
+  if(error){
+    errEl.textContent = 'Opslaan mislukt.';
+    errEl.classList.remove('hidden');
+    return;
+  }
+  instellingen.horeca_email = waarde || null;
+  toast('E-mailadres opgeslagen');
+}
+
+async function wijzigAdminWachtwoord(){
+  const nieuw = document.getElementById('admin-nieuw-wachtwoord').value;
+  const errEl = document.getElementById('admin-wachtwoord-error');
+  errEl.classList.add('hidden');
+
+  if(!nieuw || nieuw.length < 4){
+    errEl.textContent = 'Vul een wachtwoord van minimaal 4 tekens in.';
+    errEl.classList.remove('hidden');
+    return;
+  }
+
+  const gebruikersnaam = currentUser.gebruikersnaam || 'Admin';
+  const { error } = await db.from('beheerders').update({ wachtwoord: nieuw }).eq('gebruikersnaam', gebruikersnaam);
+  if(error){
+    errEl.textContent = 'Opslaan mislukt.';
+    errEl.classList.remove('hidden');
+    return;
+  }
+  document.getElementById('admin-nieuw-wachtwoord').value = '';
+  toast('Wachtwoord gewijzigd');
 }
 
 // ===========================================================
