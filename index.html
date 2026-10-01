@@ -624,7 +624,7 @@
       </p>
     </div>
 
-    <p style="font-size:11px;color:var(--text-muted);text-align:center;margin-top:24px;line-height:1.6">&copy; 2026 VanDeLinde Consulting BV<br>v3.0.1</p>
+    <p style="font-size:11px;color:var(--text-muted);text-align:center;margin-top:24px;line-height:1.6">&copy; 2026 VanDeLinde Consulting BV<br>v3.0.2</p>
   </div>
 </div>
 
@@ -5102,9 +5102,16 @@ let horecaModalData = null; // { avond, eters, tellingen } van de op dit moment 
 // zinloze losse eenmans-kolommen naast elkaar. Zelfde drempels voor scherm
 // én print, gedeeld tussen berekenHorecaLijstHtml (scherm/Balie) en
 // drukHorecaLijstAf (print) zodat ze nooit uit de pas kunnen lopen.
+// Deel 120, Kay's screenshot: sinds opmerkingen (deel 119) en "+N gasten"
+// (deel 118) achter namen kunnen staan, kan een regel ineens veel langer
+// worden dan de rest (bv. een lange vrije-tekst opmerking) -- in een
+// meerkoloms-layout (columns:N) duwt zo'n lange regel de kolomverdeling
+// volledig scheef (ongelijke kolomhoogtes, volgorde oogt rommelig). Kay's
+// verzoek: voortaan gewoon altijd één kolom, alle namen onder elkaar, geen
+// automatische 2- of 3-koloms-indeling meer. Functie blijft bestaan (i.p.v.
+// overal losse "columns:1" hard te coderen) zodat scherm en print exact
+// gelijk blijven lopen, zoals de oorspronkelijke opzet (deel 81) al bedoelde.
 function berekenHorecaKolomAantal(aantalNamen){
-  if(aantalNamen > 16) return 3;
-  if(aantalNamen > 8) return 2;
   return 1;
 }
 
