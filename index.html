@@ -284,6 +284,10 @@
   .modal-box{background:var(--surface);border-radius:12px;padding:1.5rem;max-width:340px;width:100%;box-shadow:0 12px 40px rgba(0,0,0,.25)}
   .toast.show{opacity:1}
   .empty{color:var(--text-muted);font-size:14px;padding:2rem;text-align:center}
+  /* Deel 115, Kay's verzoek: draaiende cursor tijdens de Golfdashboard-
+     horeca-sync (zie golfdashboardSyncLaadHtml/verversGolfdashboardHoreca). */
+  @keyframes golfdashboard-spin{to{transform:rotate(360deg)}}
+  .golfdashboard-spinner{display:inline-block;width:18px;height:18px;border:2px solid var(--border);border-top-color:var(--text-secondary);border-radius:50%;animation:golfdashboard-spin .7s linear infinite;vertical-align:middle;margin-right:8px}
   .top-bar{display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem;flex-wrap:wrap;gap:10px}
   .config-warning{background:var(--warning-bg);border:1px solid var(--warning-border);color:var(--warning-text);border-radius:var(--radius);padding:14px;font-size:13px;margin-bottom:1.5rem}
   a{color:var(--accent);text-decoration:none}
@@ -554,9 +558,11 @@
         <a href="#" onclick="pincodeVergeten();return false;">Pincode vergeten?</a>
       </p>
       <p class="sub" style="text-align:center;margin-top:10px">
-        <a href="#" onclick="toggleLoginForm('admin');return false;">Beheerder inlog</a>
+        <a href="#" onclick="toggleLoginForm('admin');return false;">Beheerder</a>
         &nbsp;·&nbsp;
-        <a href="#" onclick="toggleLoginForm('balie');return false;">Balie inlog</a>
+        <a href="#" onclick="toggleLoginForm('balie');return false;">Balie</a>
+        &nbsp;·&nbsp;
+        <a href="#" onclick="toggleLoginForm('horeca');return false;">Horeca</a>
       </p>
     </div>
 
@@ -593,6 +599,26 @@
       </div>
       <button class="btn btn-primary" style="width:100%;justify-content:center" onclick="balieLogin()">Inloggen</button>
       <p id="balie-login-error" class="error-msg hidden"></p>
+      <p class="sub" style="text-align:center;margin-top:18px">
+        <a href="#" onclick="toggleLoginForm('speler');return false;">Terug naar speler-inlog</a>
+      </p>
+    </div>
+
+    <!-- Horeca-login (deel 117, Kay's verzoek): geen eigen gebruikersnaamveld --
+         logt onder water in op hetzelfde "Balie"-account als de Balie-inlog
+         hierboven (bewust: "Beheerder wachtwoord is hetzelfde voor Balie en
+         Horeca", Kay's eigen woorden) en toont daarna alleen de Horeca-tab
+         i.p.v. Koffertjes, zie renderNav(). Alleen Admin kan dit wachtwoord
+         wijzigen (Admin > Admin) -- geen zelfbedienings-wachtwoordscherm meer
+         voor Balie/Horeca, zie horecaLogin()/balieLogin() hieronder. -->
+    <div id="horecaLoginForm" class="hidden">
+      <p class="sub" style="margin-bottom:24px">Inloggen als horeca</p>
+      <div class="form-group">
+        <label>Wachtwoord</label>
+        <input id="horeca-wachtwoord" type="password" autocomplete="off">
+      </div>
+      <button class="btn btn-primary" style="width:100%;justify-content:center" onclick="horecaLogin()">Inloggen</button>
+      <p id="horeca-login-error" class="error-msg hidden"></p>
       <p class="sub" style="text-align:center;margin-top:18px">
         <a href="#" onclick="toggleLoginForm('speler');return false;">Terug naar speler-inlog</a>
       </p>
@@ -697,13 +723,6 @@
        bouwen -- zie renderBalieHorecaPagina. -->
   <div id="balieHorecaPage" class="page">
     <div id="balie-horeca-content"></div>
-  </div>
-
-  <!-- BALIE > ADMIN (deel 72): alleen wachtwoord wijzigen, precies zoals
-       Admin > Admin dat kan -- de balie had hier tot nu toe geen eigen
-       manier voor, alleen Admin zelf kon zijn/haar wachtwoord wijzigen. -->
-  <div id="balieAdminPage" class="page">
-    <div id="balie-admin-content"></div>
   </div>
 
   <!-- LEDEN -->
@@ -1067,12 +1086,18 @@ function lijnKopMetTelling(g, aantalAangemeld){
 // Invaller-rijen", ongeacht koppelstatus, dus dat hoeft hier niet de hele
 // paren-berekening te herhalen.
 async function berekenAvondTellingen(avondId){
-  const [records, invallerRows] = await Promise.all([
+  const [records, invallerRows, nietBridgeRows] = await Promise.all([
     loadAanwezigheidVoorAvond(avondId),
-    loadInvallersVoorAvond(avondId)
+    loadInvallersVoorAvond(avondId),
+    loadGolfdashboardNietBridgeVoorAvond(avondId)
   ]);
   const aanmeldingen = records.filter(r=>r.aanwezig===true).length + invallerRows.length;
-  const horeca = records.filter(r=>r.diner===true).length + invallerRows.filter(r=>r.diner===true).length;
+  // Deel 116, Kay's verzoek: "Niet-Bridge"-golfdashboard-diners (geen
+  // naam-match, dus geen eigen rij in aanwezigheid) tellen wel mee in het
+  // horeca-aantal -- de keuken moet voor iedereen eten klaarmaken, lid of
+  // niet. Tellen bewust NIET mee bij "aanmeldingen" (Aantal Bridge), want
+  // dat zijn geen bridgespelers.
+  const horeca = records.filter(r=>r.diner===true).length + invallerRows.filter(r=>r.diner===true).length + nietBridgeRows.length;
   const tafels = Math.ceil(aanmeldingen / 4);
   return { aanmeldingen, tafels, horeca };
 }
@@ -1323,16 +1348,20 @@ function pincodeVergeten(){
   window.location.href = `mailto:${afzendEmailBridgecommissie()}?subject=${subject}&body=${body}`;
 }
 
-// which: 'speler' | 'admin' | 'balie' — drie losse inlogschermen (deel 38: eerst
-// was Balie een sub-optie van de Beheerder-inlog, dat bleek in de praktijk niet
-// vindbaar genoeg; nu een eigen knop en een eigen formulier).
+// which: 'speler' | 'admin' | 'balie' | 'horeca' — vier losse inlogschermen
+// (deel 38: eerst was Balie een sub-optie van de Beheerder-inlog, dat bleek
+// in de praktijk niet vindbaar genoeg; nu een eigen knop en een eigen
+// formulier per rol). Deel 117, Kay's verzoek: Horeca als vierde optie
+// erbij, naast Beheerder en Balie.
 function toggleLoginForm(which){
   document.getElementById('spelerLoginForm').classList.toggle('hidden', which!=='speler');
   document.getElementById('adminLoginForm').classList.toggle('hidden', which!=='admin');
   document.getElementById('balieLoginForm').classList.toggle('hidden', which!=='balie');
+  document.getElementById('horecaLoginForm').classList.toggle('hidden', which!=='horeca');
   document.getElementById('login-error').classList.add('hidden');
   document.getElementById('admin-login-error').classList.add('hidden');
   document.getElementById('balie-login-error').classList.add('hidden');
+  document.getElementById('horeca-login-error').classList.add('hidden');
 }
 
 async function adminLogin(){
@@ -1366,7 +1395,7 @@ async function adminLogin(){
     return;
   }
 
-  currentUser = { id: null, voornaam: 'Beheerder', achternaam: '', is_admin: true, is_balie: false, gebruikersnaam: result.beheerder.gebruikersnaam };
+  currentUser = { id: null, voornaam: 'Beheerder', achternaam: '', is_admin: true, is_balie: false, is_horeca: false, gebruikersnaam: result.beheerder.gebruikersnaam };
   sessionStorage.setItem('goyer_bridge_user', JSON.stringify(currentUser));
   await initApp();
 }
@@ -1399,7 +1428,40 @@ async function balieLogin(){
     return;
   }
 
-  currentUser = { id: null, voornaam: 'Balie', achternaam: '', is_admin: false, is_balie: true, gebruikersnaam: result.beheerder.gebruikersnaam };
+  currentUser = { id: null, voornaam: 'Balie', achternaam: '', is_admin: false, is_balie: true, is_horeca: false, gebruikersnaam: result.beheerder.gebruikersnaam };
+  sessionStorage.setItem('goyer_bridge_user', JSON.stringify(currentUser));
+  await initApp();
+}
+
+// Deel 117, Kay's verzoek: Horeca-inlog -- bewust GEEN eigen gebruikersnaam-
+// veld (zie het formulier in de HTML hierboven), logt onder water altijd in
+// op het bestaande "Balie"-account ("Beheerder wachtwoord is hetzelfde voor
+// Balie en Horeca", Kay's eigen woorden) -- dus hetzelfde wachtwoord als de
+// Balie-inlog, alleen via een andere knop/scherm. Het is_horeca-vlag
+// hieronder (i.p.v. het teruggegeven result.beheerder.rol, dat voor dit
+// account altijd 'balie' blijft) bepaalt welke, veel kleinere, navigatie
+// deze sessie te zien krijgt -- zie renderNav().
+async function horecaLogin(){
+  const wachtwoord = document.getElementById('horeca-wachtwoord').value;
+  const errEl = document.getElementById('horeca-login-error');
+  errEl.classList.add('hidden');
+
+  if(!wachtwoord){
+    errEl.textContent = 'Vul het wachtwoord in.';
+    errEl.classList.remove('hidden');
+    return;
+  }
+
+  const result = await bridgeLogin({ rol: 'beheerder', gebruikersnaam: 'Balie', wachtwoord });
+
+  if(!result.success){
+    errEl.textContent = result.error === 'Onjuist wachtwoord' ? 'Wachtwoord onjuist.' : result.error;
+    errEl.classList.remove('hidden');
+    if(result.error === 'Onjuist wachtwoord') document.getElementById('horeca-wachtwoord').value = '';
+    return;
+  }
+
+  currentUser = { id: null, voornaam: 'Horeca', achternaam: '', is_admin: false, is_balie: false, is_horeca: true, gebruikersnaam: result.beheerder.gebruikersnaam };
   sessionStorage.setItem('goyer_bridge_user', JSON.stringify(currentUser));
   await initApp();
 }
@@ -1429,6 +1491,8 @@ function logout(){
   document.getElementById('balie-gebruikersnaam').value = 'Balie';
   document.getElementById('balie-wachtwoord').value = '';
   document.getElementById('balie-login-error').classList.add('hidden');
+  document.getElementById('horeca-wachtwoord').value = '';
+  document.getElementById('horeca-login-error').classList.add('hidden');
   toggleLoginForm('speler');
 }
 
@@ -1438,12 +1502,14 @@ function logout(){
 async function initApp(){
   document.getElementById('loginScreen').classList.add('hidden');
   document.getElementById('appScreen').classList.remove('hidden');
-  // Balie ziet verder niets van de club (zie renderNav) — daarom ook een
-  // eigen titel i.p.v. "Goyer Bridge" (Kay's verzoek).
-  document.getElementById('app-title').textContent = currentUser.is_balie ? 'Bridge Koffertjes Administratie' : 'Goyer Bridge';
+  // Balie/Horeca zien verder niets van de club (zie renderNav) — daarom ook
+  // een eigen titel i.p.v. "Goyer Bridge" (Kay's verzoek).
+  document.getElementById('app-title').textContent = currentUser.is_balie
+    ? 'Bridge Koffertjes Administratie'
+    : (currentUser.is_horeca ? 'Bridge Horeca' : 'Goyer Bridge');
   document.getElementById('user-label').textContent = currentUser.id
     ? `${currentUser.voornaam} ${currentUser.achternaam}`
-    : (currentUser.is_balie ? 'Aangemeld als balie' : 'Aangemeld als beheerder');
+    : (currentUser.is_balie ? 'Aangemeld als balie' : (currentUser.is_horeca ? 'Aangemeld als horeca' : 'Aangemeld als beheerder'));
   // Kay's verzoek: bij een individuele ledeninlog de naam groter tonen.
   // De initialen-avatar naast de uitlogknop is inmiddels overal weggelaten
   // (eerst al bij ledeninlog, sinds deel 46 ook bij Beheerder/Balie-inlog) —
@@ -1484,7 +1550,7 @@ async function initApp(){
   if(currentUser.id) verversLidBerichtStip();
   if(currentUser.is_admin) ververLedenBerichtBadge();
 
-  showPage(currentUser.is_balie ? 'baliePage' : (currentUser.is_admin ? 'aanwezigPage' : 'indelingPage'));
+  showPage(currentUser.is_balie ? 'baliePage' : (currentUser.is_horeca ? 'balieHorecaPage' : (currentUser.is_admin ? 'aanwezigPage' : 'indelingPage')));
 }
 
 function renderNav(){
@@ -1492,14 +1558,19 @@ function renderNav(){
   const isAdmin = currentUser.is_admin;
   let html;
   if(currentUser.is_balie){
-    // Balie-inlog: bewust verder niets van de club te zien, maar sinds
-    // deel 72 wel een eigen "Admin"-tabblad om het eigen wachtwoord te
-    // kunnen wijzigen (stond hier nog nergens, terwijl Admin dat via
-    // Admin > Admin al wel kon).
+    // Deel 117, Kay's verzoek: Balie ziet voortaan ALLEEN Koffertjes -- de
+    // Horeca-tab (die hier tot deel 117 ook stond) heeft nu zijn eigen
+    // Horeca-inlog (zie hieronder), en het eigen "Admin"-tabblad voor
+    // wachtwoord wijzigen (sinds deel 72) is helemaal weggehaald: alleen de
+    // echte Beheerder mag dit wachtwoord nog wijzigen, vanuit Admin > Admin.
     html = `
-      <button class="nav-btn active" data-page="baliePage" onclick="showPage('baliePage')"><span class="ic">🧳</span><span class="lbl">Koffertjes</span></button>
-      <button class="nav-btn" data-page="balieHorecaPage" onclick="showPage('balieHorecaPage')"><span class="ic">🍽️</span><span class="lbl">Horeca</span></button>
-      <button class="nav-btn" data-page="balieAdminPage" onclick="showPage('balieAdminPage')"><span class="ic">⚙️</span><span class="lbl">Admin</span></button>`;
+      <button class="nav-btn active" data-page="baliePage" onclick="showPage('baliePage')"><span class="ic">🧳</span><span class="lbl">Koffertjes</span></button>`;
+  } else if(currentUser.is_horeca){
+    // Deel 117: eigen, kleinere inlog die ALLEEN de Horeca-tab te zien
+    // krijgt -- logt onder water in op hetzelfde Balie-account (zie
+    // horecaLogin hierboven), maar met een eigen, nog beperktere navigatie.
+    html = `
+      <button class="nav-btn active" data-page="balieHorecaPage" onclick="showPage('balieHorecaPage')"><span class="ic">🍽️</span><span class="lbl">Horeca</span></button>`;
   } else if(isAdmin){
     html = `
       <button class="nav-btn active" data-page="aanwezigPage" onclick="showPage('aanwezigPage')"><span class="ic">🪑</span><span class="lbl">Indeling</span></button>
@@ -1532,7 +1603,6 @@ function showPage(id){
   if(id==='adminKoffertjesPage') renderAdminKoffertjesPagina();
   if(id==='baliePage') renderBaliePagina();
   if(id==='balieHorecaPage') renderBalieHorecaPagina();
-  if(id==='balieAdminPage') renderBalieAdminPagina();
   if(id==='uitslagenPage') renderUitslagenContent();
 
   if(id==='indelingPage') startIndelingPolling();
@@ -3066,12 +3136,173 @@ async function zetWedstrijdleiderVoorLijn(avondId, lijn, lidId){
 // Admin, zie regisseursRoster) en getoond in het witte statistiekvlak
 // (Aanmeldingen/Tafels/Horeca/Regisseur) bij Admin > Indeling.
 let regisseurAvondCache = {};
+// Deel 113, Kay's verzoek: cache voor de "ter controle"-rijen uit
+// golfdashboard_match_review (zie deel 111/112) -- onzekere naam-matches uit
+// de golfdashboard-horeca-sync die de indeler hier handmatig bevestigt of
+// afwijst. Zelfde cache-per-avond-patroon als hierboven.
+let golfdashboardReviewCache = {};
+// Deel 116, Kay's verzoek: aparte cache voor de automatisch bepaalde
+// "niet_bridge"-rijen (geen enkele naam-match, dus vermoedelijk geen
+// Bridge-lid) -- deze hoeven NIET door de indeler bevestigd te worden (zie
+// golfdashboardReviewCache hierboven, die blijft puur voor de echt
+// ambigue/open gevallen), maar moeten wel op de Horecalijst verschijnen.
+let golfdashboardNietBridgeCache = {};
 async function loadRegisseurVoorAvond(avondId){
   if(regisseurAvondCache[avondId]) return regisseurAvondCache[avondId];
   const { data, error } = await db.from('avond_regisseur').select('*').eq('speelavond_id', avondId);
   if(error){ toast('Kon regisseur voor deze avond niet laden'); return []; }
   regisseurAvondCache[avondId] = data || [];
   return regisseurAvondCache[avondId];
+}
+
+// Deel 113: alleen de nog niet afgehandelde ('open') rijen -- een
+// 'bevestigd'/'afgewezen' rij heeft de indeler al een keer beoordeeld en
+// hoort niet opnieuw in dit lijstje terug te komen (de sync-functie zelf
+// overschrijft zo'n rij ook al niet meer, zie deel 112).
+async function loadGolfdashboardReviewVoorAvond(avondId){
+  if(golfdashboardReviewCache[avondId]) return golfdashboardReviewCache[avondId];
+  const { data, error } = await db.from('golfdashboard_match_review')
+    .select('*')
+    .eq('speelavond_id', avondId)
+    .eq('status', 'open')
+    .order('golfdashboard_naam');
+  if(error){ toast('Kon Golfdashboard-controlelijst niet laden'); return []; }
+  golfdashboardReviewCache[avondId] = data || [];
+  return golfdashboardReviewCache[avondId];
+}
+
+// Deel 116: wie via Golfdashboard voor de Clubschotel staat ingeschreven
+// maar met geen enkele naam in de ledenlijst overeenkomt -- de sync-functie
+// heeft dit zelf al als "niet_bridge" afgehandeld (zie deel 112), hier
+// alleen nog ophalen voor het "Niet-Bridge"-blokje op de Horecalijst.
+async function loadGolfdashboardNietBridgeVoorAvond(avondId){
+  if(golfdashboardNietBridgeCache[avondId]) return golfdashboardNietBridgeCache[avondId];
+  const { data, error } = await db.from('golfdashboard_match_review')
+    .select('*')
+    .eq('speelavond_id', avondId)
+    .eq('status', 'niet_bridge')
+    .order('golfdashboard_naam');
+  if(error){ toast('Kon Niet-Bridge-lijst niet laden'); return []; }
+  golfdashboardNietBridgeCache[avondId] = data || [];
+  return golfdashboardNietBridgeCache[avondId];
+}
+
+// Indeler kiest (of corrigeert) het lid in de dropdown en bevestigt: de
+// deelnemer komt in de horeca-lijst terecht (diner=true), met behoud van de
+// bestaande aanwezig/vegetarisch-waarde -- zelfde patroon als setDiner/
+// setDinerKeuze hieronder, nu hier omdat het om een Golfdashboard-rij gaat
+// i.p.v. een handmatige klik op het bestek-icoontje.
+async function bevestigGolfdashboardMatch(reviewId, avondId){
+  const select = document.getElementById(`golfdashboard-review-lid-${reviewId}`);
+  const lidId = select ? select.value : '';
+  if(!lidId){ toast('Kies eerst een lid'); return; }
+
+  const rows = await loadGolfdashboardReviewVoorAvond(avondId);
+  const rij = rows.find(r=>r.id===reviewId);
+  if(!rij) return;
+
+  const bestaandeRecords = await loadAanwezigheidVoorAvond(avondId);
+  const bestaand = bestaandeRecords.find(r=>r.lid_id===lidId);
+  const { error: upsertErr } = await db.from('aanwezigheid').upsert({
+    speelavond_id: avondId,
+    lid_id: lidId,
+    aanwezig: bestaand?.aanwezig ?? false,
+    diner: true,
+    vegetarisch: bestaand?.vegetarisch ?? false,
+    golfdashboard_gasten: rij.golfdashboard_gasten,
+    golfdashboard_opmerkingen: rij.golfdashboard_opmerkingen,
+    golfdashboard_gesynchroniseerd_op: new Date().toISOString()
+  }, { onConflict: 'speelavond_id,lid_id' });
+  if(upsertErr){ toast('Opslaan in horeca-lijst mislukt'); return; }
+
+  const { error: reviewErr } = await db.from('golfdashboard_match_review').update({
+    status: 'bevestigd',
+    voorgesteld_lid_id: lidId,
+    afgehandeld_op: new Date().toISOString(),
+    afgehandeld_door: currentUser?.gebruikersnaam || 'Admin',
+    bijgewerkt_op: new Date().toISOString()
+  }).eq('id', reviewId);
+  if(reviewErr){ toast('Bijwerken controlelijst mislukt'); return; }
+
+  delete golfdashboardReviewCache[avondId];
+  delete aanwezigheidCache[avondId];
+  toast('Toegevoegd aan horeca-lijst');
+  await renderAanwezigContent();
+}
+
+// Afwijzen: deze Golfdashboard-deelnemer is bewust GEEN match met een
+// bestaand lid (bv. een introducé zonder lidmaatschap) -- komt niet in de
+// horeca-lijst en verdwijnt uit dit controle-lijstje, zonder dat een
+// volgende sync-run 'm terugzet (zie de afgehandeldeNamen-check in deel 112).
+async function afwijsGolfdashboardMatch(reviewId, avondId){
+  const { error } = await db.from('golfdashboard_match_review').update({
+    status: 'afgewezen',
+    afgehandeld_op: new Date().toISOString(),
+    afgehandeld_door: currentUser?.gebruikersnaam || 'Admin',
+    bijgewerkt_op: new Date().toISOString()
+  }).eq('id', reviewId);
+  if(error){ toast('Afwijzen mislukt'); return; }
+  delete golfdashboardReviewCache[avondId];
+  toast('Afgewezen');
+  await renderAanwezigContent();
+}
+
+// Deel 115, Kay's verzoek: naast het 15-minuten-cron-schema (deel 114) ook
+// een handmatige verversing vanuit de app zelf, op de twee plekken waar de
+// horeca-lijst daadwerkelijk bekeken wordt -- Admin > Indeling > Acties >
+// Horecalijst (toonHorecaOverzicht) en Balie > Horeca (renderBalieHorecaPagina)
+// -- zodat een last-minute Golfdashboard-aanmelding niet pas bij de
+// volgende cron-tik (tot 15 minuten later) zichtbaar wordt, maar meteen bij
+// het openen van het scherm waar de keuken/balie naar kijkt.
+//
+// Roept dezelfde Edge Function aan als de cron-job (deel 112), nu met de
+// gewone publieke sleutel i.p.v. de service-role-sleutel -- de Edge
+// Function gebruikt intern altijd de service-role-sleutel om te schrijven;
+// de aanroeper (hier de app, bij de cron-job pg_net) heeft alleen een
+// geldig Supabase-token nodig om door verify_jwt heen te komen.
+//
+// Bewust GEEN harde foutmelding als dit mislukt (bv. Golfspot tijdelijk
+// onbereikbaar, of de GOLFSPOT_*-secrets nog niet gezet) -- de horeca-lijst
+// valt dan terug op de data van de laatste geslaagde sync (cron of
+// handmatig), nooit op een lege/kapotte lijst.
+//
+// Kay's verzoek: een ruimhartige afkapping tegen heen-en-weer klikken
+// (Admin > Indeling > Horecalijst of Balie > Horeca telkens opnieuw openen)
+// -- elke klik zou anders een nieuwe Golfspot-login triggeren. Binnen deze
+// 2 minuten na een geslaagde sync wordt er niet opnieuw ingelogd bij
+// Golfspot; de functie doet dan niets en geeft meteen true terug, zodat het
+// scherm de (nog verse) gecachte data gewoon toont, zonder wachttijd. Ruim
+// genoeg om realistisch heen-en-weer klikken op te vangen, kort genoeg om
+// een nieuwe aanmelding nooit lang te laten wachten op zichtbaarheid.
+const GOLFDASHBOARD_SYNC_MIN_INTERVAL_MS = 2 * 60 * 1000;
+let laatsteGolfdashboardSyncOp = 0;
+
+async function verversGolfdashboardHoreca(avondId){
+  if(Date.now() - laatsteGolfdashboardSyncOp < GOLFDASHBOARD_SYNC_MIN_INTERVAL_MS){
+    return true;
+  }
+  try{
+    const { data, error } = await db.functions.invoke('golfdashboard-horeca-sync', { body: {} });
+    if(error || !data?.success) return false;
+    laatsteGolfdashboardSyncOp = Date.now();
+    if(avondId){
+      delete aanwezigheidCache[avondId];
+      delete golfdashboardReviewCache[avondId];
+      delete golfdashboardNietBridgeCache[avondId];
+    }
+    return true;
+  }catch(e){
+    return false;
+  }
+}
+
+// Kleine herbruikbare "even geduld"-weergave tijdens het verversen hierboven
+// -- draaiende cursor (CSS: .golfdashboard-spinner) plus tekst, in dezelfde
+// kaart-stijl als de rest van het scherm.
+function golfdashboardSyncLaadHtml(){
+  return `<div class="card" style="padding:24px;text-align:center;color:var(--text-secondary)">
+      <span class="golfdashboard-spinner"></span>Golfdashboard-gegevens verversen...
+    </div>`;
 }
 
 // Zet (of wist, als lidId leeg is) de regisseur voor één avond -- hoogstens
@@ -4155,6 +4386,42 @@ async function renderAanwezigContent(){
       </div>
     </div>`;
 
+  // Deel 113, Kay's verzoek: Golfdashboard-deelnemers die niet op e-mailadres
+  // gekoppeld konden worden (naam-terugval of helemaal geen match, zie deel
+  // 107) staan hier als los kaartje klaar om handmatig te bevestigen/af te
+  // wijzen. Leeg (of alles al afgehandeld) -> geen kaartje, geen "lege staat"-
+  // rommel op dit scherm.
+  const golfdashboardReviewRows = await loadGolfdashboardReviewVoorAvond(activeAvondAanwezigId);
+  if(golfdashboardReviewRows.length){
+    const golfdashboardLedenGesorteerd = leden.slice().sort((a,b)=>a.voornaam.localeCompare(b.voornaam));
+    html += `<div class="card" style="margin:0 6px 14px;padding:12px 14px">
+        <div style="font-weight:600;margin-bottom:4px">Golfdashboard — ter controle (${golfdashboardReviewRows.length})</div>
+        <p class="sub" style="margin-bottom:10px">Deze mensen hebben zich via Golfdashboard voor de Clubschotel opgegeven, maar konden niet automatisch aan een lid gekoppeld worden. Kies het juiste lid en bevestig, of wijs af (bv. bij een introducé zonder lidmaatschap).</p>
+        ${golfdashboardReviewRows.map(r=>{
+          const opties = `<option value="">Kies lid...</option>` +
+            golfdashboardLedenGesorteerd.map(l=>`<option value="${l.id}" ${l.id===r.voorgesteld_lid_id ? 'selected' : ''}>${l.voornaam} ${l.achternaam}</option>`).join('');
+          const details = [
+            r.golfdashboard_email || '',
+            r.golfdashboard_gasten ? `${r.golfdashboard_gasten} gast(en)` : 'geen gasten opgegeven',
+            r.golfdashboard_opmerkingen ? `"${r.golfdashboard_opmerkingen}"` : ''
+          ].filter(Boolean).join(' — ');
+          return `<div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;padding:8px 0;border-top:1px solid var(--border)">
+              <div style="flex:1 1 220px;min-width:0">
+                <div style="font-weight:600">${r.golfdashboard_naam}</div>
+                <div class="sub">${details}</div>
+              </div>
+              <div style="flex:1 1 180px;min-width:160px">
+                <select id="golfdashboard-review-lid-${r.id}" style="width:100%">${opties}</select>
+              </div>
+              <div style="display:flex;gap:6px">
+                <button class="btn btn-primary btn-sm" onclick="bevestigGolfdashboardMatch('${r.id}', '${activeAvondAanwezigId}')">Bevestigen</button>
+                <button class="btn btn-sm" onclick="afwijsGolfdashboardMatch('${r.id}', '${activeAvondAanwezigId}')">Afwijzen</button>
+              </div>
+            </div>`;
+        }).join('')}
+      </div>`;
+  }
+
   const ledenById = {};
   leden.forEach(l=>{ ledenById[l.id] = l; });
 
@@ -4835,10 +5102,11 @@ async function berekenHorecaLijstHtml(avondId){
   const avond = speelavonden.find(a=>a.id===avondId);
   if(!avond) return null;
 
-  const [records, invallerRowsVoorHoreca, tellingen] = await Promise.all([
+  const [records, invallerRowsVoorHoreca, tellingen, nietBridgeRows] = await Promise.all([
     loadAanwezigheidVoorAvond(avondId),
     loadInvallersVoorAvond(avondId),
-    berekenAvondTellingen(avondId)
+    berekenAvondTellingen(avondId),
+    loadGolfdashboardNietBridgeVoorAvond(avondId)
   ]);
   // Deel 86: vegetarisch-keuze van de attendance-rij meegeven aan het
   // lid-object, zodat de namenlijst hieronder (scherm/print/mail) "(Vegetarisch)"
@@ -4859,7 +5127,15 @@ async function berekenHorecaLijstHtml(avondId){
   });
   eters.sort((a,b)=>a.voornaam.localeCompare(b.voornaam));
 
-  horecaModalData = { avond, eters, tellingen };
+  // Deel 116, Kay's verzoek: schifting Bridge/Niet-Bridge op de Horecalijst --
+  // "Niet-Bridge" zijn Golfdashboard-Clubschotel-diners zonder naam-match in
+  // de ledenlijst (dus vermoedelijk geen Bridge-lid, zie golfdashboard-horeca-
+  // sync deel 112). Geen eigen rij in aanwezigheid (geen lid_id om aan te
+  // koppelen), maar de keuken moet ze wel meetellen -- vandaar hier als losse
+  // naam + eventueel gastenaantal, apart van de Bridge-namenlijst hierboven.
+  const nietBridge = nietBridgeRows.map(r=>({ naam: r.golfdashboard_naam, gasten: r.golfdashboard_gasten || 0 }));
+
+  horecaModalData = { avond, eters, tellingen, nietBridge };
 
   // Deel 80, Kay's melding: kolommen moesten "down & across" gaan i.p.v.
   // across & down -- native CSS-multikolom (columns:N) vult altijd eerst een
@@ -4881,6 +5157,20 @@ async function berekenHorecaLijstHtml(avondId){
     ? `<div style="columns:${berekenHorecaKolomAantal(eters.length)};column-gap:14px">${eters.map((l,i)=>naamHtml(l,i)).join('')}</div>`
     : `<div class="empty">Geen aanmeldingen voor horeca</div>`;
 
+  // Alleen een "Bridge"/"Niet-Bridge"-koppenschifting laten zien zodra er
+  // ook echt Niet-Bridge-namen zijn -- op een gewone avond zonder zo'n geval
+  // blijft dit scherm exact zoals het was, geen onnodige extra koppen.
+  const toonSchifting = nietBridge.length > 0;
+  const bridgeKopHtml = toonSchifting ? `<div style="font-weight:600;font-size:13px;color:var(--text-secondary);margin-bottom:6px">Bridge</div>` : '';
+  const nietBridgeHtml = toonSchifting ? `
+    <div style="margin-top:16px">
+      <div style="font-weight:600;font-size:13px;color:var(--text-secondary);margin-bottom:6px">Niet-Bridge</div>
+      <div>${nietBridge.map((p,i)=>`<div style="display:flex;gap:8px;padding:5px 2px;border-bottom:1px solid var(--border);break-inside:avoid">
+            <span style="color:var(--text-secondary);width:20px;flex-shrink:0">${i+1}</span>
+            <span>${p.naam}${p.gasten ? ` (+${p.gasten} gast${p.gasten===1?'':'en'})` : ''}</span>
+          </div>`).join('')}</div>
+    </div>` : '';
+
   const kopHtml = `
     <div class="sub" style="margin-bottom:2px">${fmtDatumVol(avond.datum)}</div>
     <div class="sub" style="margin-bottom:14px">${avondEventOmschrijvingTekst(avond) || '—'}</div>
@@ -4889,14 +5179,25 @@ async function berekenHorecaLijstHtml(avondId){
       <div class="stat"><b>${tellingen.aanmeldingen}</b><span>Aantal Bridge</span></div>
       <div class="stat"><b>${tellingen.tafels}</b><span>Aantal tafels</span></div>
     </div>
-    <div style="margin-bottom:14px">${kolommenHtml}</div>`;
+    <div style="margin-bottom:14px">${bridgeKopHtml}${kolommenHtml}</div>
+    ${nietBridgeHtml}`;
 
   return { avond, tellingen, kopHtml };
 }
 
 async function toonHorecaOverzicht(avondId){
+  if(!avondId){ toast('Geen speelavond geselecteerd'); return; }
+
+  // Deel 115, Kay's verzoek: eerst de Golfdashboard-sync verversen (met
+  // draaiende cursor zichtbaar) voordat de horeca-lijst zelf opgebouwd
+  // wordt, zodat een last-minute Golfdashboard-aanmelding hier meteen in
+  // staat i.p.v. pas bij de volgende cron-tik.
+  document.getElementById('horecaModal-inhoud').innerHTML = golfdashboardSyncLaadHtml();
+  document.getElementById('horecaModal').classList.remove('hidden');
+  await verversGolfdashboardHoreca(avondId);
+
   const resultaat = await berekenHorecaLijstHtml(avondId);
-  if(!resultaat){ toast('Geen speelavond geselecteerd'); return; }
+  if(!resultaat){ sluitHorecaModal(); toast('Geen speelavond geselecteerd'); return; }
 
   document.getElementById('horecaModal-inhoud').innerHTML = `
     <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;margin-bottom:4px">
@@ -4908,8 +5209,6 @@ async function toonHorecaOverzicht(avondId){
       <button class="btn btn-primary" style="width:100%;justify-content:center" onclick="drukHorecaLijstAf()">Afdrukken</button>
       <button class="btn" style="width:100%;justify-content:center" onclick="mailHorecaLijst()">Mailen</button>
     </div>`;
-
-  document.getElementById('horecaModal').classList.remove('hidden');
 }
 
 // Deel 79, Kay's verzoek: Balie > Horeca -- dezelfde Horecalijst-weergave als
@@ -4955,8 +5254,12 @@ async function renderBalieHorecaPagina(){
         ${gesorteerd.map(a=>`<option value="${a.id}" ${a.id===balieHorecaGekozenAvondId?'selected':''}>${fmtDatumVol(a.datum)}</option>`).join('')}
       </select>
     </div>
-    <div id="balie-horeca-lijst"></div>`;
+    <div id="balie-horeca-lijst">${golfdashboardSyncLaadHtml()}</div>`;
 
+  // Deel 115, Kay's verzoek: bij het openen van dit tabblad eerst de
+  // Golfdashboard-sync verversen (draaiende cursor hierboven) voordat de
+  // eigenlijke horeca-lijst getoond wordt.
+  await verversGolfdashboardHoreca(balieHorecaGekozenAvondId);
   await toonBalieHorecaLijst(balieHorecaGekozenAvondId);
 }
 
@@ -4989,7 +5292,7 @@ function zetPrintPaginaStijl(css){
 
 function drukHorecaLijstAf(){
   if(!horecaModalData) return;
-  const { avond, eters, tellingen } = horecaModalData;
+  const { avond, eters, tellingen, nietBridge } = horecaModalData;
 
   // Deel 79/80: namen in kolommen, "down & across" (eerste kolom eerst
   // helemaal vol van boven naar beneden tot de paginarand, dan pas de
@@ -5015,9 +5318,18 @@ function drukHorecaLijstAf(){
         <div>Aantal Bridge: ${tellingen.aanmeldingen}</div>
         <div>Aantal tafels: ${tellingen.tafels}</div>
       </div>
+      ${nietBridge && nietBridge.length ? `<div style="font-size:12px;font-weight:700;color:#555;margin-bottom:4px">Bridge</div>` : ''}
       ${eters.length
         ? `<div style="columns:${berekenHorecaKolomAantal(eters.length)};column-gap:18px;font-size:13px">${eters.map((l,i)=>rijHtml(l,i)).join('')}</div>`
         : `<div style="padding:14px 0;color:#888">Geen aanmeldingen voor horeca</div>`}
+      ${nietBridge && nietBridge.length ? `
+        <div style="margin-top:16px">
+          <div style="font-size:12px;font-weight:700;color:#555;margin-bottom:4px">Niet-Bridge</div>
+          <div style="font-size:13px">${nietBridge.map((p,i)=>`<div style="display:flex;gap:6px;padding:5px 6px;border-bottom:1px solid #ddd;break-inside:avoid">
+                <span style="color:#666;width:20px;flex-shrink:0">${i+1}</span>
+                <span>${p.naam}${p.gasten ? ` (+${p.gasten} gast${p.gasten===1?'':'en'})` : ''}</span>
+              </div>`).join('')}</div>
+        </div>` : ''}
     </div>`;
 
   zetPrintPaginaStijl('@page{ size:A4; margin:18mm }');
@@ -5040,7 +5352,7 @@ function drukHorecaLijstAf(){
 // deze sessie misschien nog niet bezocht.
 async function mailHorecaLijst(){
   if(!horecaModalData) return;
-  const { avond, eters, tellingen } = horecaModalData;
+  const { avond, eters, tellingen, nietBridge } = horecaModalData;
 
   const { data, error } = await db.from('instellingen').select('*').eq('sleutel', 'horeca_email');
   let horecaEmail = '';
@@ -5062,6 +5374,13 @@ async function mailHorecaLijst(){
   const regels = eters.length
     ? eters.map((l,i)=>`${i+1}. ${l.voornaam} ${l.achternaam}${l.vegetarisch ? ' (Vegetarisch)' : ''}`).join('\n')
     : 'Geen aanmeldingen voor horeca';
+  // Deel 116, Kay's verzoek: schifting Bridge/Niet-Bridge, ook in de mail --
+  // alleen een los "Niet-Bridge"-blok als dat er is, anders blijft de mail
+  // exact zoals voorheen (geen onnodige "Bridge"-kop als er toch niets naast
+  // staat).
+  const nietBridgeRegels = nietBridge && nietBridge.length
+    ? '\n\nNiet-Bridge:\n' + nietBridge.map((p,i)=>`${i+1}. ${p.naam}${p.gasten ? ` (+${p.gasten} gast${p.gasten===1?'':'en'})` : ''}`).join('\n')
+    : '';
   const body = [
     'Goyer Bridge — Horecalijst',
     fmtDatumVol(avond.datum),
@@ -5071,7 +5390,7 @@ async function mailHorecaLijst(){
     `Aantal Bridge: ${tellingen.aanmeldingen}`,
     `Aantal tafels: ${tellingen.tafels}`,
     '',
-    regels
+    (nietBridgeRegels ? 'Bridge:\n' : '') + regels + nietBridgeRegels
   ].join('\n');
 
   window.location.href = `mailto:${horecaEmail}?subject=${encodeURIComponent(onderwerp)}&body=${encodeURIComponent(body)}`;
@@ -6523,8 +6842,9 @@ async function renderAdminPagina(){
 
     <div class="card" style="max-width:560px">
       <div style="font-weight:600;margin-bottom:8px">E-mailadres horeca</div>
+      <p class="sub" style="margin-bottom:10px">Meerdere adressen mogen, gescheiden door een komma (bv. bij meerdere personen in de keuken).</p>
       <div class="row" style="flex-wrap:nowrap">
-        <div style="flex:3 1 auto;min-width:0"><input id="admin-horeca-email" type="email" placeholder="bv. keuken@degoyer.nl" value="${horecaEmail}"></div>
+        <div style="flex:3 1 auto;min-width:0"><input id="admin-horeca-email" type="email" multiple placeholder="bv. keuken@degoyer.nl, bar@degoyer.nl" value="${horecaEmail}"></div>
         <div style="flex:0 0 100px"><button class="btn btn-primary" style="width:100%;justify-content:center" onclick="opslaanHorecaEmail()">Opslaan</button></div>
       </div>
       <p id="horeca-email-error" class="error-msg hidden"></p>
@@ -6541,7 +6861,54 @@ async function renderAdminPagina(){
       </div>
       <button class="btn btn-primary" style="width:100px;justify-content:center" onclick="wijzigAdminWachtwoord()">Opslaan</button>
       <p id="admin-wachtwoord-error" class="error-msg hidden"></p>
+    </div>
+
+    <!-- Deel 117, Kay's verzoek: Balie en Horeca loggen in op hetzelfde
+         gedeelde account/wachtwoord ("Balie" in de beheerders-tabel) in --
+         voorheen kon Balie dit zelf wijzigen (deel 72), maar dat is
+         weggehaald: alleen de echte Beheerder mag dit nog, en dan zonder
+         het huidige wachtwoord te moeten weten (admin_zet_beheerder_wachtwoord,
+         deel 117 SQL) -- net als "Pincode resetten" bij Admin > Leden. -->
+    <div class="card" style="max-width:560px">
+      <div style="font-weight:600;margin-bottom:8px">Wachtwoord Balie/Horeca-login wijzigen</div>
+      <p class="sub" style="margin-bottom:10px">Balie en Horeca loggen in met hetzelfde wachtwoord. Alleen Admin kan dit hier wijzigen.</p>
+      <div class="row" style="flex-wrap:nowrap;margin-bottom:10px">
+        <div style="flex:1 1 0;min-width:0"><input id="baliehoreca-nieuw-wachtwoord" type="password" autocomplete="new-password" placeholder="Nieuw wachtwoord"></div>
+        <div style="flex:1 1 0;min-width:0"><input id="baliehoreca-nieuw-wachtwoord-bevestig" type="password" autocomplete="new-password" placeholder="Bevestig wachtwoord"></div>
+      </div>
+      <button class="btn btn-primary" style="width:100px;justify-content:center" onclick="wijzigBalieHorecaWachtwoord()">Opslaan</button>
+      <p id="baliehoreca-wachtwoord-error" class="error-msg hidden"></p>
     </div>`;
+}
+
+async function wijzigBalieHorecaWachtwoord(){
+  const nieuw = document.getElementById('baliehoreca-nieuw-wachtwoord').value;
+  const bevestig = document.getElementById('baliehoreca-nieuw-wachtwoord-bevestig').value;
+  const errEl = document.getElementById('baliehoreca-wachtwoord-error');
+  errEl.classList.add('hidden');
+
+  if(!nieuw || nieuw.length < 4){
+    errEl.textContent = 'Vul een nieuw wachtwoord van minimaal 4 tekens in.';
+    errEl.classList.remove('hidden');
+    return;
+  }
+  if(nieuw !== bevestig){
+    errEl.textContent = 'De twee wachtwoorden komen niet overeen.';
+    errEl.classList.remove('hidden');
+    return;
+  }
+
+  const { data: ok, error } = await db.rpc('admin_zet_beheerder_wachtwoord', {
+    p_gebruikersnaam: 'Balie', p_nieuw_wachtwoord: nieuw
+  });
+  if(error || !ok){
+    errEl.textContent = 'Opslaan mislukt.';
+    errEl.classList.remove('hidden');
+    return;
+  }
+  document.getElementById('baliehoreca-nieuw-wachtwoord').value = '';
+  document.getElementById('baliehoreca-nieuw-wachtwoord-bevestig').value = '';
+  toast('Wachtwoord gewijzigd');
 }
 
 // ===========================================================
@@ -6666,17 +7033,29 @@ async function verwijderRegisseurUitRoster(rowId){
   document.getElementById('regisseurs-kaart').innerHTML = regisseursKaartHtml();
 }
 
+// Deel 104, Kay's verzoek: dit veld accepteert nu ook meerdere adressen in
+// één keer, gescheiden door een komma (bv. "keuken@degoyer.nl,
+// bar@degoyer.nl") -- elk los adres wordt gevalideerd en witruimte rond de
+// komma's wordt genegeerd/opgeschoond. Opslag blijft één platte string
+// (zelfde instellingen-rij als voorheen, geen schema-wijziging nodig) --
+// mailHorecaLijst() hierboven gebruikt deze string rechtstreeks als
+// mailto-ontvanger, en een mailto: met komma-gescheiden adressen wordt door
+// mailclients al standaard als "meerdere geadresseerden" behandeld, dus daar
+// hoefde niets voor aangepast te worden.
 async function opslaanHorecaEmail(){
-  const waarde = document.getElementById('admin-horeca-email').value.trim();
+  const ruw = document.getElementById('admin-horeca-email').value.trim();
   const errEl = document.getElementById('horeca-email-error');
   errEl.classList.add('hidden');
 
-  if(waarde && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(waarde)){
-    errEl.textContent = 'Vul een geldig e-mailadres in (of laat het veld leeg).';
+  const adressen = ruw.split(',').map(a=>a.trim()).filter(a=>a.length);
+  const ongeldig = adressen.find(a=>!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(a));
+  if(ongeldig){
+    errEl.textContent = `"${ongeldig}" is geen geldig e-mailadres. Vul één of meerdere geldige adressen in, gescheiden door een komma (of laat het veld leeg).`;
     errEl.classList.remove('hidden');
     return;
   }
 
+  const waarde = adressen.join(', ');
   const { error } = await db.from('instellingen').upsert({ sleutel: 'horeca_email', waarde: waarde || null });
   if(error){
     errEl.textContent = 'Opslaan mislukt.';
@@ -6684,7 +7063,8 @@ async function opslaanHorecaEmail(){
     return;
   }
   instellingen.horeca_email = waarde || null;
-  toast('E-mailadres opgeslagen');
+  document.getElementById('admin-horeca-email').value = waarde;
+  toast(adressen.length > 1 ? `${adressen.length} e-mailadressen opgeslagen` : 'E-mailadres opgeslagen');
 }
 
 async function opslaanAfzendEmail(){
@@ -6754,80 +7134,6 @@ async function wijzigAdminWachtwoord(){
   document.getElementById('admin-huidig-wachtwoord').value = '';
   document.getElementById('admin-nieuw-wachtwoord').value = '';
   document.getElementById('admin-nieuw-wachtwoord-bevestig').value = '';
-  toast('Wachtwoord gewijzigd');
-}
-
-// ===========================================================
-// BALIE > ADMIN (deel 72)
-// ===========================================================
-// Zelfde functionaliteit als de wachtwoord-kaart bij Admin > Admin
-// hierboven, maar dan voor een Balie-sessie -- bewust een eigen pagina
-// met eigen veld-id's (i.p.v. de admin-content-velden hergebruiken), want
-// beide pagina's staan tegelijk in de DOM en dubbele id's zouden
-// getElementById laten mis-grijpen. Roept dezelfde RPC
-// (wijzig_beheerder_wachtwoord) aan als wijzigAdminWachtwoord() -- die
-// controleert zelf al met welke gebruikersnaam (hier "Balie" i.p.v.
-// "Admin") en verifieert het huidige wachtwoord, dus geen nieuwe
-// SQL-migratie nodig voor dit stuk.
-async function renderBalieAdminPagina(){
-  const c = document.getElementById('balie-admin-content');
-  c.innerHTML = `
-    <div class="card" style="max-width:560px">
-      <div style="font-weight:600;margin-bottom:8px">Wachtwoord balie-login wijzigen</div>
-      <div class="row" style="flex-wrap:nowrap;margin-bottom:10px">
-        <div style="flex:1 1 0;min-width:0"><input id="balie-huidig-wachtwoord" type="password" autocomplete="current-password" placeholder="Huidig wachtwoord"></div>
-      </div>
-      <div class="row" style="flex-wrap:nowrap;margin-bottom:10px">
-        <div style="flex:1 1 0;min-width:0"><input id="balie-nieuw-wachtwoord" type="password" autocomplete="new-password" placeholder="Nieuw wachtwoord"></div>
-        <div style="flex:1 1 0;min-width:0"><input id="balie-nieuw-wachtwoord-bevestig" type="password" autocomplete="new-password" placeholder="Bevestig wachtwoord"></div>
-      </div>
-      <button class="btn btn-primary" style="width:100px;justify-content:center" onclick="wijzigBalieWachtwoord()">Opslaan</button>
-      <p id="balie-wachtwoord-error" class="error-msg hidden"></p>
-    </div>`;
-}
-
-async function wijzigBalieWachtwoord(){
-  const huidig = document.getElementById('balie-huidig-wachtwoord').value;
-  const nieuw = document.getElementById('balie-nieuw-wachtwoord').value;
-  const bevestig = document.getElementById('balie-nieuw-wachtwoord-bevestig').value;
-  const errEl = document.getElementById('balie-wachtwoord-error');
-  errEl.classList.add('hidden');
-
-  if(!huidig){
-    errEl.textContent = 'Vul je huidige wachtwoord in.';
-    errEl.classList.remove('hidden');
-    return;
-  }
-
-  if(!nieuw || nieuw.length < 4){
-    errEl.textContent = 'Vul een nieuw wachtwoord van minimaal 4 tekens in.';
-    errEl.classList.remove('hidden');
-    return;
-  }
-
-  if(nieuw !== bevestig){
-    errEl.textContent = 'De twee wachtwoorden komen niet overeen.';
-    errEl.classList.remove('hidden');
-    return;
-  }
-
-  const gebruikersnaam = currentUser.gebruikersnaam || 'Balie';
-  const { data: ok, error } = await db.rpc('wijzig_beheerder_wachtwoord', {
-    p_gebruikersnaam: gebruikersnaam, p_oud_wachtwoord: huidig, p_nieuw_wachtwoord: nieuw
-  });
-  if(error){
-    errEl.textContent = 'Opslaan mislukt.';
-    errEl.classList.remove('hidden');
-    return;
-  }
-  if(!ok){
-    errEl.textContent = 'Huidig wachtwoord is onjuist.';
-    errEl.classList.remove('hidden');
-    return;
-  }
-  document.getElementById('balie-huidig-wachtwoord').value = '';
-  document.getElementById('balie-nieuw-wachtwoord').value = '';
-  document.getElementById('balie-nieuw-wachtwoord-bevestig').value = '';
   toast('Wachtwoord gewijzigd');
 }
 
@@ -8724,6 +9030,9 @@ document.getElementById('balie-gebruikersnaam').addEventListener('keydown', e=>{
 });
 document.getElementById('balie-wachtwoord').addEventListener('keydown', e=>{
   if(e.key === 'Enter') balieLogin();
+});
+document.getElementById('horeca-wachtwoord').addEventListener('keydown', e=>{
+  if(e.key === 'Enter') horecaLogin();
 });
 </script>
 </body>
