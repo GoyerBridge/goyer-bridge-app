@@ -1097,7 +1097,17 @@ async function berekenAvondTellingen(avondId){
   // horeca-aantal -- de keuken moet voor iedereen eten klaarmaken, lid of
   // niet. Tellen bewust NIET mee bij "aanmeldingen" (Aantal Bridge), want
   // dat zijn geen bridgespelers.
-  const horeca = records.filter(r=>r.diner===true).length + invallerRows.filter(r=>r.diner===true).length + nietBridgeRows.length;
+  // Deel 118, Kay's verzoek: een Golfdashboard-inschrijving kan gasten
+  // bevatten ("Kay van de Linde +1" = Kay zelf plus 1 gast, dus 2 eters in
+  // totaal) -- golfdashboard_gasten is dat aantal EXTRA gasten bovenop de
+  // ingeschreven persoon zelf (Kay's eigen woorden: "als iemand 1 gast
+  // toevoegt, dan zijn het er twee"). Die extra gasten moeten dus ook echt
+  // meetellen in "Aantal Horeca", zowel voor Bridge-leden (aanwezigheid) als
+  // voor Niet-Bridge-namen. Invallers hebben geen Golfdashboard-koppeling en
+  // dus geen gasten-veld, die tellen zoals voorheen gewoon als 1.
+  const horeca = records.filter(r=>r.diner===true).reduce((som,r)=>som + 1 + (r.golfdashboard_gasten || 0), 0)
+    + invallerRows.filter(r=>r.diner===true).length
+    + nietBridgeRows.reduce((som,r)=>som + 1 + (r.golfdashboard_gasten || 0), 0);
   const tafels = Math.ceil(aanmeldingen / 4);
   return { aanmeldingen, tafels, horeca };
 }
@@ -5111,19 +5121,22 @@ async function berekenHorecaLijstHtml(avondId){
   // Deel 86: vegetarisch-keuze van de attendance-rij meegeven aan het
   // lid-object, zodat de namenlijst hieronder (scherm/print/mail) "(Vegetarisch)"
   // achter de naam kan tonen.
+  // Deel 118: golfdashboard_gasten (extra gasten bovenop het lid zelf, zie
+  // berekenAvondTellingen hierboven) ook meegeven, zodat de namenlijst
+  // "Naam +N" kan tonen zoals Kay gevraagd heeft.
   const eters = records
     .filter(r=>r.diner===true)
     .map(r=>{
       const lid = leden.find(l=>l.id===r.lid_id);
-      return lid ? { ...lid, vegetarisch: r.vegetarisch === true } : null;
+      return lid ? { ...lid, vegetarisch: r.vegetarisch === true, gasten: r.golfdashboard_gasten || 0 } : null;
     })
     .filter(Boolean);
   // Deel 55: een Invaller die voor deze avond op "eet mee" staat, hoort ook op
   // de horeca-lijst -- met alleen zijn/haar (pseudo-)naam, geen e-mailadres,
   // dus deze komt nooit in een mail-aan-leden terecht, uitsluitend hier op de
-  // horeca-lijst zelf.
+  // horeca-lijst zelf. Geen Golfdashboard-koppeling, dus gasten:0.
   invallerRowsVoorHoreca.filter(row=>row.diner===true).forEach(row=>{
-    eters.push({ voornaam: invallerLabel(row, invallerRowsVoorHoreca), achternaam: '', vegetarisch: row.vegetarisch === true });
+    eters.push({ voornaam: invallerLabel(row, invallerRowsVoorHoreca), achternaam: '', vegetarisch: row.vegetarisch === true, gasten: 0 });
   });
   eters.sort((a,b)=>a.voornaam.localeCompare(b.voornaam));
 
@@ -5151,7 +5164,7 @@ async function berekenHorecaLijstHtml(avondId){
   // niet meer comfortabel is, gaat de lijst over 2 of 3 kolommen verdelen.
   const naamHtml = (l,i) => `<div style="display:flex;gap:8px;padding:5px 2px;border-bottom:1px solid var(--border);break-inside:avoid">
         <span style="color:var(--text-secondary);width:20px;flex-shrink:0">${i+1}</span>
-        <span>${l.voornaam} ${l.achternaam}${l.vegetarisch ? ' (Vegetarisch)' : ''}</span>
+        <span>${l.voornaam} ${l.achternaam}${l.gasten ? ' +'+l.gasten : ''}${l.vegetarisch ? ' (Vegetarisch)' : ''}</span>
       </div>`;
   const kolommenHtml = eters.length
     ? `<div style="columns:${berekenHorecaKolomAantal(eters.length)};column-gap:14px">${eters.map((l,i)=>naamHtml(l,i)).join('')}</div>`
@@ -5167,7 +5180,7 @@ async function berekenHorecaLijstHtml(avondId){
       <div style="font-weight:600;font-size:13px;color:var(--text-secondary);margin-bottom:6px">Niet-Bridge</div>
       <div>${nietBridge.map((p,i)=>`<div style="display:flex;gap:8px;padding:5px 2px;border-bottom:1px solid var(--border);break-inside:avoid">
             <span style="color:var(--text-secondary);width:20px;flex-shrink:0">${i+1}</span>
-            <span>${p.naam}${p.gasten ? ` (+${p.gasten} gast${p.gasten===1?'':'en'})` : ''}</span>
+            <span>${p.naam}${p.gasten ? ' +'+p.gasten : ''}</span>
           </div>`).join('')}</div>
     </div>` : '';
 
@@ -5305,7 +5318,7 @@ function drukHorecaLijstAf(){
   // eenmans-kolommen naast elkaar.
   const rijHtml = (l,i) => `<div style="display:flex;gap:6px;padding:5px 6px;border-bottom:1px solid #ddd;break-inside:avoid">
         <span style="color:#666;width:20px;flex-shrink:0">${i+1}</span>
-        <span>${l.voornaam} ${l.achternaam}${l.vegetarisch ? ' (Vegetarisch)' : ''}</span>
+        <span>${l.voornaam} ${l.achternaam}${l.gasten ? ' +'+l.gasten : ''}${l.vegetarisch ? ' (Vegetarisch)' : ''}</span>
       </div>`;
 
   document.getElementById('horeca-print-area').innerHTML = `
@@ -5327,7 +5340,7 @@ function drukHorecaLijstAf(){
           <div style="font-size:12px;font-weight:700;color:#555;margin-bottom:4px">Niet-Bridge</div>
           <div style="font-size:13px">${nietBridge.map((p,i)=>`<div style="display:flex;gap:6px;padding:5px 6px;border-bottom:1px solid #ddd;break-inside:avoid">
                 <span style="color:#666;width:20px;flex-shrink:0">${i+1}</span>
-                <span>${p.naam}${p.gasten ? ` (+${p.gasten} gast${p.gasten===1?'':'en'})` : ''}</span>
+                <span>${p.naam}${p.gasten ? ' +'+p.gasten : ''}</span>
               </div>`).join('')}</div>
         </div>` : ''}
     </div>`;
@@ -5372,14 +5385,14 @@ async function mailHorecaLijst(){
   // Deel 86: "(Vegetarisch)" ook hier, om dezelfde reden als op scherm/print --
   // zodat wie de horecalijst ontvangt in één oogopslag ziet wie vegetarisch eet.
   const regels = eters.length
-    ? eters.map((l,i)=>`${i+1}. ${l.voornaam} ${l.achternaam}${l.vegetarisch ? ' (Vegetarisch)' : ''}`).join('\n')
+    ? eters.map((l,i)=>`${i+1}. ${l.voornaam} ${l.achternaam}${l.gasten ? ' +'+l.gasten : ''}${l.vegetarisch ? ' (Vegetarisch)' : ''}`).join('\n')
     : 'Geen aanmeldingen voor horeca';
   // Deel 116, Kay's verzoek: schifting Bridge/Niet-Bridge, ook in de mail --
   // alleen een los "Niet-Bridge"-blok als dat er is, anders blijft de mail
   // exact zoals voorheen (geen onnodige "Bridge"-kop als er toch niets naast
   // staat).
   const nietBridgeRegels = nietBridge && nietBridge.length
-    ? '\n\nNiet-Bridge:\n' + nietBridge.map((p,i)=>`${i+1}. ${p.naam}${p.gasten ? ` (+${p.gasten} gast${p.gasten===1?'':'en'})` : ''}`).join('\n')
+    ? '\n\nNiet-Bridge:\n' + nietBridge.map((p,i)=>`${i+1}. ${p.naam}${p.gasten ? ' +'+p.gasten : ''}`).join('\n')
     : '';
   const body = [
     'Goyer Bridge — Horecalijst',
