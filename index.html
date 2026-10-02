@@ -589,15 +589,30 @@
     <!-- Beheerder-login -->
     <div id="adminLoginForm" class="hidden">
       <p class="sub" style="margin-bottom:24px">Inloggen als beheerder</p>
-      <div class="form-group">
-        <label>Gebruikersnaam</label>
-        <input id="admin-gebruikersnaam" value="Admin" autocomplete="off">
-      </div>
-      <div class="form-group">
-        <label>Wachtwoord</label>
-        <input id="admin-wachtwoord" type="password" autocomplete="off">
-      </div>
-      <button class="btn btn-primary" style="width:100%;justify-content:center" onclick="adminLogin()">Inloggen</button>
+      <!-- Deel 127, Kay's melding: met bewaard wachtwoord (Samsung Pass/
+           Android-autofill) loggen deze schermen stilletjes niet in -- geen
+           foutmelding, gewoon niets. Meest waarschijnlijke oorzaak:
+           losse <input>'s zonder omringend <form> worden door
+           Android's eigen autofill-framework (waar Samsung Pass doorheen
+           loopt, los van Chrome's eigen wachtwoordbeheer) niet altijd
+           betrouwbaar als inlogformulier herkend, en autocomplete="off"
+           ontmoedigt bovendien juist het normale gedrag. Nu een echt
+           <form> (met correcte autocomplete-waarden) dat invullen vanuit
+           een wachtwoordmanager op de standaard manier laat verlopen --
+           preventDefault voorkomt dat er ooit echt een pagina herladen/
+           verstuurd wordt, de bestaande adminLogin() blijft de eigenlijke
+           inloglogica doen. -->
+      <form onsubmit="event.preventDefault(); adminLogin(); return false;">
+        <div class="form-group">
+          <label>Gebruikersnaam</label>
+          <input id="admin-gebruikersnaam" value="Admin" autocomplete="username">
+        </div>
+        <div class="form-group">
+          <label>Wachtwoord</label>
+          <input id="admin-wachtwoord" type="password" autocomplete="current-password">
+        </div>
+        <button type="submit" class="btn btn-primary" style="width:100%;justify-content:center">Inloggen</button>
+      </form>
       <p id="admin-login-error" class="error-msg hidden"></p>
       <p class="sub" style="text-align:center;margin-top:18px">
         <a href="#" onclick="toggleLoginForm('speler');return false;">Terug naar speler-inlog</a>
@@ -609,15 +624,18 @@
          beheerders-tabel, het rol-veld bepaalt welk account bij welke inlog hoort) -->
     <div id="balieLoginForm" class="hidden">
       <p class="sub" style="margin-bottom:24px">Inloggen als balie</p>
-      <div class="form-group">
-        <label>Gebruikersnaam</label>
-        <input id="balie-gebruikersnaam" value="Balie" autocomplete="off">
-      </div>
-      <div class="form-group">
-        <label>Wachtwoord</label>
-        <input id="balie-wachtwoord" type="password" autocomplete="off">
-      </div>
-      <button class="btn btn-primary" style="width:100%;justify-content:center" onclick="balieLogin()">Inloggen</button>
+      <!-- Deel 127: zelfde reden/opzet als adminLoginForm hierboven. -->
+      <form onsubmit="event.preventDefault(); balieLogin(); return false;">
+        <div class="form-group">
+          <label>Gebruikersnaam</label>
+          <input id="balie-gebruikersnaam" value="Balie" autocomplete="username">
+        </div>
+        <div class="form-group">
+          <label>Wachtwoord</label>
+          <input id="balie-wachtwoord" type="password" autocomplete="current-password">
+        </div>
+        <button type="submit" class="btn btn-primary" style="width:100%;justify-content:center">Inloggen</button>
+      </form>
       <p id="balie-login-error" class="error-msg hidden"></p>
       <p class="sub" style="text-align:center;margin-top:18px">
         <a href="#" onclick="toggleLoginForm('speler');return false;">Terug naar speler-inlog</a>
@@ -633,18 +651,21 @@
          voor Balie/Horeca, zie horecaLogin()/balieLogin() hieronder. -->
     <div id="horecaLoginForm" class="hidden">
       <p class="sub" style="margin-bottom:24px">Inloggen als horeca</p>
-      <div class="form-group">
-        <label>Wachtwoord</label>
-        <input id="horeca-wachtwoord" type="password" autocomplete="off">
-      </div>
-      <button class="btn btn-primary" style="width:100%;justify-content:center" onclick="horecaLogin()">Inloggen</button>
+      <!-- Deel 127: zelfde reden/opzet als adminLoginForm hierboven. -->
+      <form onsubmit="event.preventDefault(); horecaLogin(); return false;">
+        <div class="form-group">
+          <label>Wachtwoord</label>
+          <input id="horeca-wachtwoord" type="password" autocomplete="current-password">
+        </div>
+        <button type="submit" class="btn btn-primary" style="width:100%;justify-content:center">Inloggen</button>
+      </form>
       <p id="horeca-login-error" class="error-msg hidden"></p>
       <p class="sub" style="text-align:center;margin-top:18px">
         <a href="#" onclick="toggleLoginForm('speler');return false;">Terug naar speler-inlog</a>
       </p>
     </div>
 
-    <p style="font-size:11px;color:var(--text-muted);text-align:center;margin-top:24px;line-height:1.6">&copy; 2026 VanDeLinde Consulting BV<br>v3.1.5</p>
+    <p style="font-size:11px;color:var(--text-muted);text-align:center;margin-top:24px;line-height:1.6">&copy; 2026 VanDeLinde Consulting BV<br>v3.1.6</p>
   </div>
 </div>
 
