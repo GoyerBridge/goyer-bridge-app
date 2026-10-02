@@ -624,7 +624,7 @@
       </p>
     </div>
 
-    <p style="font-size:11px;color:var(--text-muted);text-align:center;margin-top:24px;line-height:1.6">&copy; 2026 VanDeLinde Consulting BV<br>v3.0.2</p>
+    <p style="font-size:11px;color:var(--text-muted);text-align:center;margin-top:24px;line-height:1.6">&copy; 2026 VanDeLinde Consulting BV<br>v3.1.1</p>
   </div>
 </div>
 
@@ -970,6 +970,20 @@ if(!SUPABASE_URL || !SUPABASE_KEY){
 
 const { createClient } = supabase;
 const db = createClient(SUPABASE_URL, SUPABASE_KEY);
+
+// Deel 121, Kay's verzoek: service worker registreren zodat Chrome op
+// Android de app als "installeerbaar" herkent ("App installeren" stond
+// grijs in het browsermenu, ontbrekende service worker was de oorzaak --
+// zie sw.js hiernaast voor waarom die bewust niets cacht). Relatief pad
+// ("sw.js", geen "/sw.js") omdat de site op GitHub Pages niet op de
+// domeinroot staat maar onder /goyer-bridge-app/ -- met een absoluut pad
+// zou de registratie naar het verkeerde adres wijzen en stil falen.
+// sw.js moet dus in dezelfde map als index.html in de GitHub-repo staan.
+if('serviceWorker' in navigator){
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('sw.js').catch(err => console.error('Service worker registratie mislukt:', err));
+  });
+}
 
 // ===========================================================
 // STATE
@@ -1568,13 +1582,18 @@ function renderNav(){
   const isAdmin = currentUser.is_admin;
   let html;
   if(currentUser.is_balie){
-    // Deel 117, Kay's verzoek: Balie ziet voortaan ALLEEN Koffertjes -- de
-    // Horeca-tab (die hier tot deel 117 ook stond) heeft nu zijn eigen
-    // Horeca-inlog (zie hieronder), en het eigen "Admin"-tabblad voor
-    // wachtwoord wijzigen (sinds deel 72) is helemaal weggehaald: alleen de
-    // echte Beheerder mag dit wachtwoord nog wijzigen, vanuit Admin > Admin.
+    // Deel 117, Kay's verzoek: het eigen "Admin"-tabblad van Balie voor
+    // wachtwoord wijzigen (sinds deel 72) is weggehaald -- alleen de echte
+    // Beheerder mag dit wachtwoord nog wijzigen, vanuit Admin > Admin.
+    // Deel 122, Kay's verzoek: de Horeca-tab (in deel 117 hier weggehaald
+    // ten gunste van de eigen Horeca-inlog) staat weer terug naast
+    // Koffertjes -- Balie heeft dus weer twee tabbladen. Hergebruikt
+    // bewust dezelfde "balieHorecaPage"/renderBalieHorecaPagina() als de
+    // aparte Horeca-inlog (die blijft gewoon ook bestaan, als kortere weg
+    // voor wie alleen de horecalijst nodig heeft).
     html = `
-      <button class="nav-btn active" data-page="baliePage" onclick="showPage('baliePage')"><span class="ic">🧳</span><span class="lbl">Koffertjes</span></button>`;
+      <button class="nav-btn active" data-page="baliePage" onclick="showPage('baliePage')"><span class="ic">🧳</span><span class="lbl">Koffertjes</span></button>
+      <button class="nav-btn" data-page="balieHorecaPage" onclick="showPage('balieHorecaPage')"><span class="ic">🍽️</span><span class="lbl">Horeca</span></button>`;
   } else if(currentUser.is_horeca){
     // Deel 117: eigen, kleinere inlog die ALLEEN de Horeca-tab te zien
     // krijgt -- logt onder water in op hetzelfde Balie-account (zie
