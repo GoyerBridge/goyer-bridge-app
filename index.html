@@ -665,7 +665,7 @@
       </p>
     </div>
 
-    <p style="font-size:11px;color:var(--text-muted);text-align:center;margin-top:24px;line-height:1.6">&copy; 2026 VanDeLinde Consulting BV<br>v3.1.7</p>
+    <p style="font-size:11px;color:var(--text-muted);text-align:center;margin-top:24px;line-height:1.6">&copy; 2026 VanDeLinde Consulting BV<br>v3.1.8</p>
   </div>
 </div>
 
@@ -1325,10 +1325,46 @@ async function bridgeLogin(body){
 }
 
 async function login(){
-  const ledenId = document.getElementById('login-naam').value;
+  let ledenId = document.getElementById('login-naam').value;
+  const naamInputEl = document.getElementById('login-naam-input');
   const pincode = document.getElementById('login-pincode').value.trim();
   const errEl = document.getElementById('login-error');
   errEl.classList.add('hidden');
+
+  // Deel 129, Kay's melding (na deel 127 en deel 128): inloggen bleef stil
+  // mislukken -- geen foutmelding, gewoon niets -- zodra een Samsung-telefoon
+  // zowel de naam als de pincode automatisch invulde ("Logt nog steeds niet
+  // in als naam en wachtwoord automatisch ingevuld worden."). Oorzaak: de
+  // ZICHTBARE naaminvoer (#login-naam-input) is slechts een typeahead-
+  // tekstveld; de waarde die login() hierboven leest komt uit de VERBORGEN
+  // <select id="login-naam">, die uitsluitend wordt gezet door
+  // kiesLoginNaam() -- aangeroepen via een klik op een dropdown-rij, of
+  // Enter bij precies één overgebleven match. Android's wachtwoordinvulling
+  // kan alleen de zichtbare tekstwaarde zetten; het "klikt" nooit op een
+  // rij. Erger nog, de 'input'-listener op het zichtbare veld (zie
+  // hieronder) zet de verborgen select bij ELKE wijziging terug op '' --
+  // dus zelfs met een correct zichtbaar ingevulde naam bleef ledenId
+  // hierboven leeg. Met een lege ledenId stopt login() meteen via de guard
+  // verderop, zonder enige melding -- precies wat Kay meermaals
+  // rapporteerde.
+  //
+  // Fix: als de verborgen select leeg is maar het zichtbare veld wel tekst
+  // bevat, wordt die tekst alsnog tegen loginLedenLijst opgezocht (exacte,
+  // hoofdletterongevoelige match op "voornaam achternaam") en, bij een
+  // match, via kiesLoginNaam() alsnog netjes geselecteerd -- precies wat een
+  // klik op de bijbehorende dropdown-rij ook zou doen. Raakt het bestaande
+  // klik/Enter-pad niet aan; is puur een extra fallback voor het geval de
+  // select nog niet gezet is op het moment dat login() wordt aangeroepen.
+  if(!ledenId && naamInputEl){
+    const getypt = naamInputEl.value.trim().toLowerCase();
+    if(getypt){
+      const match = loginLedenLijst.find(l => `${l.voornaam || ''} ${l.achternaam || ''}`.trim().toLowerCase() === getypt);
+      if(match){
+        kiesLoginNaam(match.id, `${match.voornaam} ${match.achternaam}`);
+        ledenId = match.id;
+      }
+    }
+  }
 
   if(!ledenId || pincode.length !== 4) return;
 
