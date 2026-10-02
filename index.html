@@ -665,7 +665,7 @@
       </p>
     </div>
 
-    <p style="font-size:11px;color:var(--text-muted);text-align:center;margin-top:24px;line-height:1.6">&copy; 2026 VanDeLinde Consulting BV<br>v3.1.8</p>
+    <p style="font-size:11px;color:var(--text-muted);text-align:center;margin-top:24px;line-height:1.6">&copy; 2026 VanDeLinde Consulting BV<br>v3.1.9</p>
   </div>
 </div>
 
@@ -9135,8 +9135,29 @@ loadInstellingen();
 
 document.getElementById('login-naam').addEventListener('change', ()=>{
   document.getElementById('login-error').classList.add('hidden');
-  document.getElementById('login-pincode').value = '';
-  document.getElementById('login-pincode').focus();
+  const pinEl = document.getElementById('login-pincode');
+  // Deel 130, Kay's melding (vervolg op deel 129): met alleen de fallback in
+  // login() ging het nog niet ver genoeg -- de naam werd nu wel herkend
+  // zodra er daadwerkelijk werd ingelogd, maar Android/Samsung-autofill
+  // vult naam EN pincode tegelijk in zonder dat het 'input'-event van het
+  // pincodeveld daarbij afgaat (dat event is de enige plek die login()
+  // aanroept) -- dus gebeurde er na het automatisch invullen helemaal
+  // niets, totdat Kay zelf nog een keer op de (inmiddels zichtbare,
+  // precies passende) naam in de lijst klikte. Die klik riep al
+  // kiesLoginNaam() aan, wat hier via het 'change'-event terechtkwam --
+  // maar dit blokje legde de pincode dan altijd eerst leeg, in de
+  // veronderstelling dat een nieuwe naamkeuze altijd van een leeg
+  // pincodeveld uitgaat (waar dat bij gewoon, handmatig gebruik ook altijd
+  // klopt). Als de pincode op dit moment al 4 cijfers bevat -- wat alleen
+  // gebeurt wanneer autofill het al heeft klaargezet -- wordt die dus niet
+  // meer weggegooid, maar wordt meteen geprobeerd in te loggen met de nu
+  // bekende combinatie.
+  if(pinEl.value.length === 4){
+    login();
+  } else {
+    pinEl.value = '';
+    pinEl.focus();
+  }
 });
 (function(){
   const loginNaamInput = document.getElementById('login-naam-input');
@@ -9147,6 +9168,24 @@ document.getElementById('login-naam').addEventListener('change', ()=>{
     // verborgen <select> weer op een geldige waarde (zie kiesLoginNaam()).
     document.getElementById('login-naam').value = '';
     renderLoginNaamDropdown(loginNaamInput.value);
+    // Deel 130, vervolg: tot nu toe moest er altijd expliciet op een rij
+    // geklikt worden (of Enter bij precies één match) om de verborgen
+    // selectie te zetten -- Android-autofill "typt" de volledige naam in
+    // één keer neer zonder ooit ergens op te klikken, en bleef daardoor
+    // altijd op dit punt steken: de lijst opende wel (met de juiste naam
+    // erin), maar er gebeurde vanzelf niets ("opent een submenu, maar vult
+    // het niet in", precies Kay's beschrijving). Een EXACTE
+    // (hoofdletterongevoelige) match op de volledige naam wordt daarom nu
+    // ook zonder klik meteen geselecteerd. Bij gewoon typen kan dit pas bij
+    // de allerlaatste toets van een naam optreden (ervoor is de getypte
+    // tekst per definitie korter dan een volledige naam en dus nooit een
+    // exacte match), dus wordt er niet voortijdig iets gekozen terwijl
+    // iemand nog aan het typen is.
+    const getypt = loginNaamInput.value.trim().toLowerCase();
+    if(getypt){
+      const exacteMatch = loginLedenLijst.find(l => `${l.voornaam || ''} ${l.achternaam || ''}`.trim().toLowerCase() === getypt);
+      if(exacteMatch) kiesLoginNaam(exacteMatch.id, `${exacteMatch.voornaam} ${exacteMatch.achternaam}`);
+    }
   });
   loginNaamInput.addEventListener('keydown', e => {
     if(e.key === 'Escape'){
