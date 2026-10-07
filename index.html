@@ -667,7 +667,7 @@
       </p>
     </div>
 
-    <p style="font-size:11px;color:var(--text-muted);text-align:center;margin-top:24px;line-height:1.6">&copy; 2026 VanDeLinde Consulting BV<br>v3.2.2</p>
+    <p style="font-size:11px;color:var(--text-muted);text-align:center;margin-top:24px;line-height:1.6">&copy; 2026 VanDeLinde Consulting BV<br>v3.2.3</p>
   </div>
 </div>
 
@@ -9000,7 +9000,16 @@ async function renderBaliePagina(){
   // is — niet bij de allereerste keer (anders piept het meteen bij het inloggen als
   // er toevallig al bestellingen open staan). Gebaseerd op de actieve (niet-grijze)
   // "worden opgehaald"-tegels, ghosts tellen hier niet mee.
-  const huidigeIds = new Set(wachtendActief.map(r=>r.id));
+  // Deel 135, gevonden bij Kay's verzoek om de koffertjes-module grondig te
+  // testen vóór de livegang: deze regel verwees naar een nooit-gedeclareerde
+  // variabele "wachtendActief" (waarschijnlijk een restant van een eerdere
+  // naamswijziging naar "vandaagActief"). De kaartjes zelf werden daardoor
+  // nog wel gewoon getoond (die HTML stond al klaar vóór deze regel), maar
+  // deze functie gooide hierna altijd een ReferenceError -- met als gevolg
+  // dat het geluidssignaal bij een nieuwe bestelling nooit werkte (silent
+  // falen, alleen zichtbaar in de browserconsole). Gecorrigeerd naar de
+  // daadwerkelijk gedeclareerde variabele "vandaagActief" hierboven.
+  const huidigeIds = new Set(vandaagActief.map(r=>r.id));
   if(balieBekendeNieuweIds !== null && [...huidigeIds].some(id=>!balieBekendeNieuweIds.has(id))){
     speelBalieGeluid();
   }
