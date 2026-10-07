@@ -667,7 +667,7 @@
       </p>
     </div>
 
-    <p style="font-size:11px;color:var(--text-muted);text-align:center;margin-top:24px;line-height:1.6">&copy; 2026 VanDeLinde Consulting BV<br>v3.2.1</p>
+    <p style="font-size:11px;color:var(--text-muted);text-align:center;margin-top:24px;line-height:1.6">&copy; 2026 VanDeLinde Consulting BV<br>v3.2.2</p>
   </div>
 </div>
 
@@ -2502,6 +2502,17 @@ async function resetLidPincode(id){
   toast(`Pincode van ${l.voornaam} gereset naar 0000`);
 }
 
+// Deel 134, Kay's verzoek: de twee statistiek-vlakjes (lijn/sterktenummer en
+// aantal gespeelde partijen) bovenaan het eigen profiel helemaal weg. Blijft
+// bewust een `async function` (ook al wordt er nu niets meer geawait) --
+// renderLeden() geeft deze promise door aan renderLedenBehoudVoorkeurScroll()
+// (zie deel 81), die daarmee wacht tot de nieuwe DOM er staat voordat de
+// scrollpositie van het voorkeurpartners-vakje wordt hersteld; dat blijft ook
+// zonder await correct werken (de DOM wordt al synchroon gezet vóórdat deze
+// functie's promise resolvet), maar de async-vorm zelf hoeft dus niet te
+// wijzigen. `laadAantalPartijen()` (iets verderop) wordt hierdoor nergens
+// meer aangeroepen -- bewust laten staan (geen DB-kosten als 'ie niet
+// aangeroepen wordt) voor het geval dit aantal elders nog eens nodig is.
 async function renderEigenProfiel(c){
   const l = leden.find(x=>x.id===currentUser.id);
   if(!l){
@@ -2509,7 +2520,6 @@ async function renderEigenProfiel(c){
     return;
   }
 
-  const aantalPartijen = await laadAantalPartijen(l.id);
   const anderen = leden.filter(x=>x.id!==l.id).sort((a,b)=>a.voornaam.localeCompare(b.voornaam));
 
   let vastePartnerHtml;
@@ -2558,19 +2568,9 @@ async function renderEigenProfiel(c){
     </label>`;
   }).join('');
 
-  // Deel 64, Kay's verzoek: op het eigen profiel niet alleen de lijn-letter
-  // tonen, maar ook het nummer uit de sterktelijst (bv. "A/3") -- dezelfde
-  // rangTekst-opmaak als elders in de app (Admin > Indeling, "Mijn
-  // Indeling"), i.p.v. hier los alleen l.speelsterkte te laten zien.
-  const sterkteTekst = l.speelsterkte ? rangTekst(l) : '–';
-
   c.innerHTML = `
   <div class="card" style="max-width:560px">
     <div style="font-weight:600;font-size:16px;margin-bottom:14px">${l.voornaam} ${l.achternaam}</div>
-    <div class="grid2" style="margin-bottom:1.25rem">
-      <div class="stat"><b>${sterkteTekst}</b><span>lijn</span></div>
-      <div class="stat"><b>${aantalPartijen}</b><span>gespeeld</span></div>
-    </div>
     <div class="form-group">
       <label>E-mail</label>
       <input value="${l.email || ''}" onchange="updateEigenVeld('email', this.value)">
