@@ -667,7 +667,7 @@
       </p>
     </div>
 
-    <p style="font-size:11px;color:var(--text-muted);text-align:center;margin-top:24px;line-height:1.6">&copy; 2026 VanDeLinde Consulting BV<br>v3.2.0</p>
+    <p style="font-size:11px;color:var(--text-muted);text-align:center;margin-top:24px;line-height:1.6">&copy; 2026 VanDeLinde Consulting BV<br>v3.2.1</p>
   </div>
 </div>
 
@@ -8730,22 +8730,47 @@ async function laadKoffertjeLeenfrequentie(){
     .sort((a,b)=>b.aantal - a.aantal || a.lid.voornaam.localeCompare(b.lid.voornaam));
 }
 
+// Deel 134, Kay's verzoek: (1) de uitlegregel onder de titel mag weg, (2) een
+// rij aanklikken moet een overzicht tonen van precies welke koffertjes dat
+// lid heeft geleend en wanneer -- tot nu toe liet deze kaart alleen het
+// totaal zien. Hergebruikt bewust de al bestaande, generieke infoModal
+// (toonInfoModal, zie elders) in plaats van een heel nieuwe modal erbij te
+// bouwen -- past hier prima (het is gewoon tekst) en scheelt een hoop extra
+// HTML/CSS voor iets dat verder nergens anders voorkomt.
 function koffertjeLeenfrequentieHtml(rijen){
   const rijenHtml = rijen.length ? rijen.map((r,i)=>`
-      <div style="display:flex;gap:10px;padding:6px 2px;border-bottom:1px solid var(--border)">
+      <div style="display:flex;gap:10px;padding:6px 2px;border-bottom:1px solid var(--border);cursor:pointer" onclick="toonKoffertjeLeenDetails('${r.lid.id}')">
         <span style="width:28px;color:var(--text-secondary)">${i+1}</span>
         <span style="flex:1">${r.lid.voornaam} ${r.lid.achternaam}</span>
         <span style="font-weight:600">${r.aantal}</span>
       </div>`).join('')
     : '<div class="empty" style="padding:0.5rem 0">Nog geen opgehaalde koffertjes.</div>';
   return `<div class="card" style="padding:14px 16px;margin-top:14px">
-      <div style="font-weight:600;margin-bottom:2px">Koffertjes — leenfrequentie</div>
-      <p class="sub" style="margin-bottom:10px">Aantal daadwerkelijk opgehaalde koffertjes per lid, aller tijden.</p>
+      <div style="font-weight:600;margin-bottom:10px">Koffertjes — leenfrequentie</div>
       ${rijen.length ? `<div style="display:flex;gap:10px;padding:2px 2px 6px;font-size:12px;color:var(--text-secondary);border-bottom:1px solid var(--border)">
         <span style="width:28px">Rank</span><span style="flex:1">Naam</span><span>Koffertjes</span>
       </div>` : ''}
       ${rijenHtml}
     </div>`;
+}
+
+// Bij het aanklikken van een rij in de leenfrequentie-kaart hierboven: alle
+// koffertjes die dit lid daadwerkelijk heeft opgehaald, met de datum van
+// ophalen, nieuwste eerst. Los opgevraagd (niet uit de al geladen
+// leenfrequentie-telling) omdat die telling bewust geen per-koffertje-detail
+// bijhoudt.
+async function toonKoffertjeLeenDetails(lidId){
+  const lid = leden.find(l=>l.id===lidId);
+  const { data, error } = await db.from('koffertje_bestellingen')
+    .select('koffertje_nummer, opgehaald_op')
+    .eq('lid_id', lidId).not('opgehaald_op', 'is', null)
+    .order('opgehaald_op', { ascending:false });
+  if(error){ toast('Kon koffertje-historie niet laden'); return; }
+  const naam = lid ? `${lid.voornaam} ${lid.achternaam}` : 'Dit lid';
+  const regels = (data || []).map(r =>
+    `Koffertje ${r.koffertje_nummer} — ${new Date(r.opgehaald_op).toLocaleDateString('nl-NL', {day:'numeric', month:'long', year:'numeric'})}`
+  );
+  toonInfoModal(`${naam} — ${regels.length} koffertje${regels.length===1?'':'s'}:\n\n${regels.join('\n')}`);
 }
 
 async function renderAdminKoffertjesPagina(){
