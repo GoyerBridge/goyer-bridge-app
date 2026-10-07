@@ -353,12 +353,14 @@
 
   /* Koffertjes (leden-tab, Admin-tab en Balie-scherm) — hergebruikt bewust
      dezelfde kolommen-aanpak als Admin > Indeling (.indeling-kolommen /
-     .indeling-kolom / .indeling-kolom-header): drie kolommen (Expert/
+     .indeling-kolom / .indeling-kolom-header): drie kolommen (Uitdagend/
+     Fors Uitdagend/Gewoon Uitdagend, zie deel 132 — hiervoor Expert/
      Gevorderd/Beginner), horizontaal scrollen op smalle schermen, geen
      gestapelde kaarten (zie eerdere afspraak daarover). */
-  /* Elke niveaugroep (Expert/Gevorderd/Beginner) in een eigen kader met de
-     naam gecentreerd erboven, zodat de drie groepen duidelijk van elkaar te
-     onderscheiden zijn (Kay's feedback op de eerdere, kaderloze weergave). */
+  /* Elke niveaugroep (Uitdagend/Fors Uitdagend/Gewoon Uitdagend) in een eigen
+     kader met de naam gecentreerd erboven, zodat de drie groepen duidelijk
+     van elkaar te onderscheiden zijn (Kay's feedback op de eerdere,
+     kaderloze weergave). */
   /* Deel 58, Kay's melding: de statistiekbalk bovenaan Admin > Koffertjes
      (Beschikbaar/Uitgeleend/Verlopen/Geblokkeerd) gebruikte vaste
      4-koloms-grid met woorden die op smalle schermen (iPhone) niet meer
@@ -665,7 +667,7 @@
       </p>
     </div>
 
-    <p style="font-size:11px;color:var(--text-muted);text-align:center;margin-top:24px;line-height:1.6">&copy; 2026 VanDeLinde Consulting BV<br>v3.1.9</p>
+    <p style="font-size:11px;color:var(--text-muted);text-align:center;margin-top:24px;line-height:1.6">&copy; 2026 VanDeLinde Consulting BV<br>v3.2.0</p>
   </div>
 </div>
 
@@ -1089,11 +1091,20 @@ let adminIndelingPollTimer = null;     // Admin > Indeling (aanwezigPage), deel 
 // die een koffertje teruggeeft) pas nadat je zelf wegnavigeerde en
 // terugkwam op het scherm, wat verwarrend overkwam (Kay's melding).
 const KOFFERTJE_POLL_INTERVAL_MS = 15000;
+// Deel 132, Kay's verzoek: nieuwe namen en grenzen voor de drie
+// niveaugroepen, en het totaal aantal koffertjes gaat tegelijk van 45 naar
+// 60 (bevestigd: er zijn nu ook daadwerkelijk 60 fysieke koffertjes).
+// Voorheen: Expert 1-15, Gevorderd 16-30, Beginner 31-45.
 const KOFFERTJE_GROEPEN = [
-  { label: 'Expert', van: 1, tot: 15 },
-  { label: 'Gevorderd', van: 16, tot: 30 },
-  { label: 'Beginner', van: 31, tot: 45 }
+  { label: 'Uitdagend', van: 1, tot: 29 },
+  { label: 'Fors Uitdagend', van: 30, tot: 39 },
+  { label: 'Gewoon Uitdagend', van: 40, tot: 60 }
 ];
+// Deel 132: totaal aantal koffertjes afgeleid van KOFFERTJE_GROEPEN (de
+// hoogste 'tot'-grens) in plaats van nog een los hardcoded getal ernaast —
+// zo hoeft een volgende aanpassing van de grenzen niet ook nog op een
+// tweede plek (de "Beschikbaar: X/45"-teller) doorgevoerd te worden.
+const AANTAL_KOFFERTJES = Math.max(...KOFFERTJE_GROEPEN.map(g => g.tot));
 
 // Deel 66/67: JS-workaround "forceerIOSLayoutHertekening()" (een reflow
 // forceren door <body> kort display:none te zetten) is in deel 71
@@ -8748,14 +8759,14 @@ async function renderAdminKoffertjesPagina(){
     laadKoffertjeLeenfrequentie()
   ]);
   // Een geblokkeerd koffertje telt niet meer mee als "beschikbaar" (het is
-  // immers niet te bestellen) — vandaar hier ook van 45 afgetrokken, naast de
-  // koffertjes met een open bestelling.
-  const beschikbaar = 45 - open.length - blokkades.length;
+  // immers niet te bestellen) — vandaar hier ook van AANTAL_KOFFERTJES
+  // afgetrokken, naast de koffertjes met een open bestelling.
+  const beschikbaar = AANTAL_KOFFERTJES - open.length - blokkades.length;
 
   c.innerHTML = `
     <div class="card" style="padding:14px 16px;margin-bottom:14px">
       <div class="koffertje-statsgrid">
-        <div class="koffertje-statsgrid-item"><div class="koffertje-statsgrid-label">Beschikbaar:</div><div>${beschikbaar}/45</div></div>
+        <div class="koffertje-statsgrid-item"><div class="koffertje-statsgrid-label">Beschikbaar:</div><div>${beschikbaar}/${AANTAL_KOFFERTJES}</div></div>
         <div class="koffertje-statsgrid-item"><div class="koffertje-statsgrid-label">Uitgeleend:</div><div>${open.filter(r=>r.opgehaald_op).length}</div></div>
         <div class="koffertje-statsgrid-item"><div class="koffertje-statsgrid-label">Verlopen (&gt;10 dagen):</div><div>${open.filter(r=>koffertjeIsVerlopen(r)).length}</div></div>
         <div class="koffertje-statsgrid-item"><div class="koffertje-statsgrid-label">Geblokkeerd:</div><div>${blokkades.length}</div></div>
