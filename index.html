@@ -667,7 +667,7 @@
       </p>
     </div>
 
-    <p style="font-size:11px;color:var(--text-muted);text-align:center;margin-top:24px;line-height:1.6">&copy; 2026 VanDeLinde Consulting BV<br>v3.2.3</p>
+    <p style="font-size:11px;color:var(--text-muted);text-align:center;margin-top:24px;line-height:1.6">&copy; 2026 VanDeLinde Consulting BV<br>v3.2.4</p>
   </div>
 </div>
 
@@ -2014,12 +2014,20 @@ function voorlopigeAanmeldingenHtml(records){
     .filter(x=>x.lid)
     .sort((a,b)=>a.lid.voornaam.localeCompare(b.lid.voornaam));
 
+  // Deel 136, Kay's verzoek: de lijn (rangTekst) achter de naam weggehaald
+  // uit deze voorlopige-aanmeldingenlijst -- dit was de plek waar leden hun
+  // (en elkaars) vaste lijn het vaakst te zien kregen, in de dagen vóór een
+  // speelavond. Puur een weergavewijziging: rangTekst() zelf blijft
+  // ongewijzigd en wordt nog gewoon gebruikt in Admin > Indeling en de PDF
+  // (zie de andere aanroepen van rangTekst verderop in dit bestand) -- alleen
+  // deze ene <span> is verwijderd. Geen sortering/filtering in deze functie
+  // hangt van de lijn af (de lijst is en blijft alfabetisch op voornaam), dus
+  // dit raakt verder geen functionaliteit.
   const rijHtml = ({ lid: l, diner }) => {
     const heeftPartnerAangemeld = !!(l.vaste_partner_id && recordMap[l.vaste_partner_id] === true);
     const kleur = heeftPartnerAangemeld ? 'var(--info-text)' : 'var(--danger-text)';
     return `<div class="indeling-naam" style="cursor:pointer" onclick="toonContactKeuze('${l.id}')">
         <span class="naam-tekst" style="color:${kleur}">${l.voornaam} ${l.achternaam}</span>
-        <span class="rang">${rangTekst(l)}</span>
         <span class="horeca-icoon" style="flex-shrink:0;display:inline-flex;align-items:center;justify-content:center;width:16px;height:16px;border-radius:50%;font-size:9px;background:${diner ? 'var(--success-bg)' : 'var(--danger-bg)'};color:${diner ? 'var(--success-text)' : 'var(--danger-text)'}" title="${diner ? 'Eet mee' : 'Eet niet mee'}">🍴</span>
       </div>`;
   };
