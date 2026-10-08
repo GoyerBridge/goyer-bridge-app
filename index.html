@@ -667,7 +667,7 @@
       </p>
     </div>
 
-    <p style="font-size:11px;color:var(--text-muted);text-align:center;margin-top:24px;line-height:1.6">&copy; 2026 VanDeLinde Consulting BV<br>v3.2.4</p>
+    <p style="font-size:11px;color:var(--text-muted);text-align:center;margin-top:24px;line-height:1.6">&copy; 2026 VanDeLinde Consulting BV<br>v3.2.5</p>
   </div>
 </div>
 
@@ -4079,6 +4079,17 @@ function bepaalEffectieveGroepVoorLid(avondId, lidId){
 // Alleen-lezen weergave van één speler-rij (geen uitschrijf-knop, geen
 // sleep-handvat, geen dropdown) — de eigen naam wordt vetgedrukt zodat een lid
 // zichzelf meteen terugvindt in het paar of de kolom.
+// Deel 137, Kay's verzoek (vervolg op deel 136): ook hier, in de
+// gepubliceerde eigen-lijn-weergave van "Mijn Indeling", stond nog een
+// lijnletter achter elke naam (zichtbaar in haar screenshot als "C"/"B" naast
+// de spelers) -- dat is dezelfde rangTekst()-aanroep als eerder al uit
+// voorlopigeAanmeldingenHtml gehaald is, nu ook hier weggehaald. Puur een
+// weergavewijziging: rangTekst() zelf blijft ongewijzigd en wordt nog gewoon
+// gebruikt in Admin > Indeling en de PDF (persoonRijHtml, niet deze
+// alleen-lezen variant persoonRijHtmlLezen). Deze functie wordt uitsluitend
+// aangeroepen door paarHtmlLezen/singleHtmlLezen, die op hun beurt
+// uitsluitend door eigenLijnIndelingHtml (de gepubliceerde "Mijn
+// Indeling"-pagina) gebruikt worden -- raakt dus verder niets.
 function persoonRijHtmlLezen(persoon, eigenId){
   const eigen = persoon.id === eigenId;
   if(persoon.isInvaller){
@@ -4091,7 +4102,6 @@ function persoonRijHtmlLezen(persoon, eigenId){
   // bellen/mailen heeft geen zin.
   return `<div class="indeling-naam"${eigen ? '' : ` style="cursor:pointer" onclick="toonContactKeuze('${persoon.id}')"`}>
       <span class="naam-tekst"${eigen ? ' style="font-weight:700"' : ''}>${persoon.voornaam} ${persoon.achternaam}</span>
-      <span class="rang">${rangTekst(persoon)}</span>
     </div>`;
 }
 // volgnummer (deel 58, Kay's verzoek): dezelfde live 1-2-3-nummering als
