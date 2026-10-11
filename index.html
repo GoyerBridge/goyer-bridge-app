@@ -118,6 +118,16 @@
   h1{font-size:19px;font-weight:800;color:#fff;line-height:1.05}
   .sub{font-size:13px;color:var(--text-secondary)}
   .card{background:var(--surface);border-radius:12px;padding:1.5rem;margin-bottom:1.5rem;box-shadow:0 1px 6px rgba(30,28,20,0.08)}
+  /* Deel 143, Kay's verzoek: het seizoensoverzicht (Bridge & Dineren) moet
+     "onderscheidend" zijn van de rest van de informatie -- vandaar een
+     eigen, accentgekleurd vlak in plaats van de standaard .card. */
+  .seizoen-kaart{background:var(--accent-bg);border:1px solid var(--accent);border-radius:12px;padding:1.1rem 1.3rem;margin-bottom:1.5rem}
+  .seizoen-kaart-titel{font-weight:700;color:var(--accent-text);font-size:14px;margin-bottom:8px}
+  .seizoen-regel{cursor:pointer;font-size:15px;color:var(--accent-text);padding:2px 0}
+  .seizoen-regel b{font-size:19px}
+  .seizoen-regel:hover{text-decoration:underline}
+  .seizoen-regel-sub{font-size:12.5px;color:var(--accent-text);opacity:0.8;margin-bottom:8px}
+  .seizoen-scheiding{height:1px;background:var(--accent);opacity:0.3;margin:8px 0}
   .hidden{display:none !important}
   label{font-size:13px;color:var(--text-secondary);display:block;margin-bottom:4px}
   input:not([type="checkbox"]),select{width:100%;height:41px;border:1px solid var(--border-strong);border-radius:var(--radius);padding:0 12px;font-size:15px;background:var(--surface);color:var(--text)}
@@ -298,6 +308,11 @@
   .drag-handle:active{cursor:grabbing}
   .sterkte-placeholder{opacity:0.35}
   .sterkte-ghost{position:fixed;z-index:1000;pointer-events:none;box-shadow:0 8px 24px rgba(0,0,0,.18);opacity:0.97;margin:0}
+  /* Deel 142: rijen op de (teruggezette) Sterktelijst-tab -- zelfde opzet als
+     .pair-row (kaartje, geen lijst-styling) zodat ze fijn te raken zijn als
+     sleepdoel. */
+  .sterkte-rij{background:var(--surface);border-radius:8px;padding:6px 10px;margin-bottom:6px;display:flex;align-items:center;gap:8px;box-shadow:0 1px 3px rgba(30,28,20,0.06)}
+  .sterktelijst-lijst{min-height:10px}
   .avatar{width:32px;height:32px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;flex-shrink:0}
   .toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:var(--text);color:#fff;padding:10px 22px;border-radius:8px;font-size:13.5px;z-index:999;opacity:0;transition:opacity .2s;pointer-events:none}
   .modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.4);display:flex;align-items:center;justify-content:center;z-index:1100;padding:20px}
@@ -667,7 +682,7 @@
       </p>
     </div>
 
-    <p style="font-size:11px;color:var(--text-muted);text-align:center;margin-top:24px;line-height:1.6">&copy; 2026 VanDeLinde Consulting BV<br>v3.2.5</p>
+    <p style="font-size:11px;color:var(--text-muted);text-align:center;margin-top:24px;line-height:1.6">&copy; 2026 VanDeLinde Consulting BV<br>v3.3.1</p>
   </div>
 </div>
 
@@ -773,6 +788,13 @@
     <div id="leden-content"></div>
   </div>
 
+  <!-- STERKTELIJST (admin) -- deel 142, Kay's verzoek: terug als eigen,
+       sleepbare tab (zoals vóór deel 86), i.p.v. het invulveld dat deel 138
+       even in Admin > Leden had gezet. -->
+  <div id="sterktelijstPage" class="page">
+    <div id="sterktelijst-content"></div>
+  </div>
+
   <!-- SPEELAVONDEN (admin) -->
   <!-- Deel 58, Kay's melding (iPhone-view): de twee invoerrijen hieronder
        gebruikten .row-nowrap-scroll (nooit wrappen, horizontaal scrollen bij
@@ -855,9 +877,12 @@
            extra), wat achteraf (Kay's melding) als een storende lege strook
            vóór de volgende kolom zichtbaar bleek; deel 80 heeft dit verkrapt
            naar 292px (5px marge i.p.v. 33px) — nog steeds ruimer dan het kale
-           minimum, maar de lege strook is nu nauwelijks nog te zien. Totale
-           tabelbreedte hierboven (1699px = 175+130+190+292+190+170+130+292+130)
-           is deze som. -->
+           minimum, maar de lege strook is nu nauwelijks nog te zien.
+           Deel 140 had hier even twee kolommen (Aantal Bridge/Aantal Diner)
+           toegevoegd; deel 143, Kay's verzoek draait dat terug -- dat
+           overzicht staat voortaan als seizoenstotaal op Leden (zie
+           renderSeizoensoverzicht), niet meer per speelavond hier. Terug naar
+           9 <col>'s / 1699px. -->
       <colgroup>
         <col style="width:175px"><col style="width:130px"><col style="width:190px"><col style="width:292px"><col style="width:190px"><col style="width:170px"><col style="width:130px"><col style="width:292px"><col style="width:130px">
       </colgroup>
@@ -953,6 +978,14 @@
 <div id="omschrijvingModal" class="modal-overlay hidden" onclick="if(event.target===this) sluitOmschrijvingModal()">
   <div class="modal-box" style="max-width:420px">
     <div id="omschrijvingModal-inhoud"></div>
+  </div>
+</div>
+
+<!-- Deel 143, Kay's verzoek: pop-up met de namenlijst achter een van de
+     twee Totalen op het seizoensoverzicht (zie toonSeizoenPersonen). -->
+<div id="seizoenPersonenModal" class="modal-overlay hidden" onclick="if(event.target===this) sluitSeizoenPersonenModal()">
+  <div class="modal-box" style="max-width:380px;max-height:85vh;overflow-y:auto">
+    <div id="seizoenPersonenModal-inhoud"></div>
   </div>
 </div>
 
@@ -1129,16 +1162,65 @@ function naamVan(id){
   const l = leden.find(x=>x.id===id);
   return l ? `${l.voornaam} ${l.achternaam}` : '—';
 }
-// Deel 86, Kay's verzoek: de sterktelijst (en daarmee het rangcijfer, bv. het
-// oude "A/2") verdwijnt uit de app -- alleen nog de lijnletter zelf tonen.
-// Deel 87: de sterktelijst-volgorde (voorheen sterkteRangVan(), sterk_positie)
-// wordt nergens meer voor gebruikt, ook niet meer intern in automatischeIndeling
-// (die sorteert nu alfabetisch) -- sterkteRangVan() is daarom helemaal
-// verwijderd. Gedeeld tussen Admin > Indeling en de individuele "Mijn
-// Indeling"-pagina.
+// Deel 86, Kay's verzoek destijds: de sterktelijst (en daarmee het
+// rangcijfer, bv. het oude "A/2") verdween uit de app -- alleen nog de
+// lijnletter zelf getoond. Deel 87: de sterktelijst-volgorde (sterk_positie)
+// werd toen ook nergens meer intern gebruikt (automatischeIndeling sorteert
+// sinds dat deel alfabetisch, en blijft dat ook nu gewoon doen -- dat is niet
+// teruggedraaid).
+//
+// Deel 138, Kay's vervolgverzoek: het rangcijfer komt terug, maar dit keer
+// UITSLUITEND in schermen die toch al alleen voor Admin bereikbaar zijn
+// (Admin > Indeling, de Sterktelijst-tab, en de PDF-export "Indeling
+// afdrukken", die puur Kay's eigen naslag is bij het overtypen in
+// Bridge-It -- zie drukIndelingAf). rangTekst() wordt sinds deel 136/137 al
+// niet meer aangeroepen vanuit de leden-eigen schermen
+// (voorlopigeAanmeldingenHtml en de gepubliceerde "Mijn Indeling" gebruiken
+// hun eigen, rangloze variant persoonRijHtmlLezen) -- dus deze functie hier
+// gewoon weer uitbreiden is genoeg, geen aparte "admin-only"-variant nodig.
+// Deel 142: het aanpas-veld dat deel 138 hier even in Admin > Leden had
+// gezet is weer weg -- de rangorde wordt voortaan uitsluitend aangepast op
+// de eigen, sleepbare Sterktelijst-tab (zie renderSterktelijst/
+// startSterkteDrag hieronder), zoals Kay het liever terug wilde.
+//
+// Deel 144, Kay's correctie: deel 142 liet deze hieronder nog per LIJN
+// opnieuw bij 1 beginnen -- dat klopte niet. Kay: "ik dacht dat we één
+// sterktelijst hadden, en niet per lijn weer op 1 begonnen". Twee dingen
+// bevestigen dat ze gelijk heeft: het requirement-document noemt het
+// uitdrukkelijk "Rangorde van ALLE spelers" (één doorlopende lijst, geen
+// aparte lijstjes per lijn), en addLid gaf een nieuw lid altijd al de
+// hoogste sterk_positie van IEDEREEN + 1, ongeacht lijn -- zinloos als
+// sterk_positie een per-lijn volgnummer zou zijn. Het cijfer is dus de
+// 1-gebaseerde plek van dit lid in de ÉNE club-brede sterktelijst (alle
+// leden met een echte lijn samen, A/B/C/S), niet BINNEN zijn eigen lijn --
+// de lijn-letter ervoor (bv. "A/47") is dus gewoon ter referentie, geen
+// aparte telling.
 function rangTekst(persoon){
-  return persoon.speelsterkte || '';
+  if(!persoon.speelsterkte) return '';
+  const rang = berekenSterkteRang(persoon.id);
+  return rang ? `${persoon.speelsterkte}/${rang}` : persoon.speelsterkte;
 }
+
+// Geeft de 1-gebaseerde plek van een lid in de ÉNE club-brede sterktelijst
+// terug (alle leden met een echte lijn -- A/B/C/S -- samen gesorteerd op
+// sterk_positie), of null als het lid niet gevonden kan worden of geen
+// echte lijn heeft ('K'/'I'/onbekend). Puur een berekening op de al geladen
+// `leden`-array -- geen eigen databasecall, dus veilig om per rij opnieuw
+// aan te roepen.
+const ECHTE_LIJNEN = ['A','B','C','S'];
+function berekenSterkteRang(lidId){
+  const persoon = leden.find(l=>l.id===lidId);
+  if(!persoon || !ECHTE_LIJNEN.includes(persoon.speelsterkte)) return null;
+  const lijst = leden.filter(l=>ECHTE_LIJNEN.includes(l.speelsterkte))
+    .sort((a,b)=>((a.sterkte_positie||0)-(b.sterkte_positie||0)) || a.voornaam.localeCompare(b.voornaam));
+  const idx = lijst.findIndex(l=>l.id===lidId);
+  return idx===-1 ? null : idx+1;
+}
+
+// Deel 142, Kay's verzoek: het aanpassen van de rangorde gebeurt niet meer
+// via een los invulveld (dat was deel 138) maar weer door te slepen, op de
+// eigen Sterktelijst-tab -- zie renderSterktelijst/startSterkteDrag/
+// persistSterktelijstVolgorde hieronder, bij de andere sleepfuncties.
 // Deel 56: hernoemd van "Speelsterkte" naar "Lijn" in de UI-tekst op Kay's
 // verzoek (het onderliggende databaseveld `leden.speelsterkte` heet nog
 // gewoon zo, dit is puur een weergavewijziging).
@@ -1197,6 +1279,59 @@ async function berekenAvondTellingen(avondId){
 // bestaande avondEventOmschrijvingTekst() (verderop in dit bestand, al overal
 // gebruikt door o.a. Admin > Indeling) — géén eigen nieuwe functie, om niet
 // twee functies met dezelfde naam te krijgen.
+
+// Deel 143, Kay's verzoek (seizoensoverzicht Bridge & Dineren). Een
+// bridge-seizoen bij Goyer heeft geen vaste kalendermaanden -- Kay's eigen
+// antwoord op de vraag wanneer een seizoen loopt: "van eerste tm laatste
+// speeldag". Seizoenen worden daarom hier afgeleid uit de daadwerkelijke
+// speelavonden-data, niet uit een vaste maand-grens: een nieuw seizoen
+// begint zodra er een gat van meer dan SEIZOEN_GAT_DAGEN tussen twee
+// opeenvolgende speelavonden valt (de zomerstop) -- een kortere
+// onderbreking (bv. de kerstvakantie) valt daar ruim onder en splitst dus
+// niet. 60 dagen is een aanname (niet door Kay bevestigd); makkelijk aan te
+// passen als seizoenen in de praktijk verkeerd knippen.
+const SEIZOEN_GAT_DAGEN = 60;
+
+// Groepeert ALLE speelavonden (verleden én toekomst) in seizoen-clusters,
+// gesorteerd op datum. Elk cluster krijgt een label op basis van het jaar
+// van zijn eerste en laatste speeldag: "2026" als beide in hetzelfde jaar
+// vallen, anders "2026/2027".
+function berekenSeizoenen(){
+  const sorted = [...speelavonden].sort((a,b)=>new Date(a.datum)-new Date(b.datum));
+  const clusters = [];
+  sorted.forEach(a=>{
+    const vorige = clusters.length ? clusters[clusters.length-1] : null;
+    const vorigeLaatste = vorige ? vorige[vorige.length-1] : null;
+    const gatDagen = vorigeLaatste ? (new Date(a.datum) - new Date(vorigeLaatste.datum)) / 86400000 : Infinity;
+    if(vorige && gatDagen <= SEIZOEN_GAT_DAGEN){
+      vorige.push(a);
+    } else {
+      clusters.push([a]);
+    }
+  });
+  return clusters.map(cluster=>{
+    const eersteJaar = new Date(cluster[0].datum).getFullYear();
+    const laatsteJaar = new Date(cluster[cluster.length-1].datum).getFullYear();
+    const label = eersteJaar === laatsteJaar ? `${eersteJaar}` : `${eersteJaar}/${laatsteJaar}`;
+    return { label, speelavonden: cluster };
+  });
+}
+
+// Het "huidige" seizoen: het meest recente cluster waarvan de eerste
+// speeldag al is geweest. Werkt zowel midden in een seizoen (nog
+// speeldagen te gaan) als in de zomerstop ná de laatste speeldag (nog geen
+// speelavonden voor het volgende seizoen ingevoerd) -- in beide gevallen is
+// dit het cluster dat Kay als "nu lopend" zou herkennen. Geeft null terug
+// als er nog helemaal geen speelavond is geweest.
+function huidigSeizoen(){
+  const vandaag = vandaagISO();
+  let huidig = null;
+  berekenSeizoenen().forEach(s=>{
+    if(s.speelavonden[0].datum <= vandaag) huidig = s;
+  });
+  return huidig;
+}
+
 function initialenVan(id){
   const l = leden.find(x=>x.id===id);
   return l ? (l.voornaam[0]+l.achternaam[0]).toUpperCase() : '?';
@@ -1718,6 +1853,7 @@ function renderNav(){
     html = `
       <button class="nav-btn active" data-page="aanwezigPage" onclick="showPage('aanwezigPage')"><span class="ic">🪑</span><span class="lbl">Indeling</span></button>
       <button class="nav-btn" data-page="ledenPage" onclick="showPage('ledenPage')"><span class="ic">👤</span><span class="lbl">Leden</span></button>
+      <button class="nav-btn" data-page="sterktelijstPage" onclick="showPage('sterktelijstPage')"><span class="ic">🏅</span><span class="lbl">Sterktelijst</span></button>
       <button class="nav-btn" data-page="adminKoffertjesPage" onclick="showPage('adminKoffertjesPage')"><span class="ic">🧳</span><span class="lbl">Koffertjes</span></button>
       <button class="nav-btn" data-page="avondenPage" onclick="showPage('avondenPage')"><span class="ic">🗓️</span><span class="lbl">Speeldagen</span></button>
       <button class="nav-btn" data-page="adminPage" onclick="showPage('adminPage')"><span class="ic">⚙️</span><span class="lbl">Admin</span></button>`;
@@ -1738,6 +1874,7 @@ function showPage(id){
   document.querySelectorAll('.nav-btn').forEach(b=>b.classList.toggle('active', b.dataset.page===id));
 
   if(id==='ledenPage') renderLeden();
+  if(id==='sterktelijstPage') renderSterktelijst();
   if(id==='aanwezigPage') renderAanwezigPills();
   if(id==='avondenPage') renderAvonden();
   if(id==='indelingPage') renderIndelingContent();
@@ -2098,6 +2235,7 @@ let ledenFilterSterkte = '';
 let ledenFilterBetaald = '';
 let ledenVoorkeurOpen = new Set();
 let lidModalId = null;
+let sterktelijstZoekTerm = '';
 
 function toggleLedenVoorkeurEditor(lidId){
   if(ledenVoorkeurOpen.has(lidId)) ledenVoorkeurOpen.delete(lidId);
@@ -2282,7 +2420,15 @@ function renderLeden(){
 
   const gefilterd = berekenGefilterdeLeden();
 
-  let html = `<div class="row" style="margin-bottom:14px;align-items:flex-end">
+  // Deel 143, Kay's verzoek: het seizoensoverzicht (Bridge & Dineren)
+  // helemaal bovenaan Leden, in een eigen vlak. Staat in een los container-
+  // div die hierna apart (async) gevuld wordt door renderSeizoensoverzicht()
+  // -- zo blijft de rest van deze pagina (zoekveld, ledenlijst) meteen
+  // zichtbaar en hoeft niet te wachten op de tellingen van mogelijk
+  // tientallen speelavonden.
+  let html = `<div id="seizoensoverzicht-box"></div>`;
+
+  html += `<div class="row" style="margin-bottom:14px;align-items:flex-end">
     <div style="flex:0 1 220px"><input id="leden-zoek-input" placeholder="Zoek een lid..." value="${ledenZoekTerm}" oninput="filterLedenZoek(this.value)"></div>
     <div style="flex:0 0 170px">
       <select id="leden-actie-select" onchange="handleLedenActie(this.value)">
@@ -2370,6 +2516,11 @@ function renderLeden(){
   // Standaard alleen een klikbare naamlijst — de volledige, bewerkbare
   // leden-informatie zit sinds deel 19 in een pop-up (zie openLidModal/
   // renderLidModal hieronder) in plaats van in doorlopend zichtbare vlakken.
+  // Deel 138 had hier even het sterktelijst-rangcijfer toegevoegd; deel 142,
+  // Kay's verzoek ("vroeger overzichtelijker met een sleepbare
+  // Sterktelijst-tab, graag weer zo, en wat je bij Leden had toegevoegd weer
+  // weghalen") draait dat hier terug — de rangorde leeft voortaan weer
+  // uitsluitend op zijn eigen tab (zie sterktelijstPage/renderSterktelijst).
   gefilterd.forEach(l=>{
     html += `<div class="toggle-card" onclick="openLidModal('${l.id}')">
       <span style="flex:1;font-weight:500">${l.voornaam} ${l.achternaam}</span>
@@ -2379,12 +2530,194 @@ function renderLeden(){
 
   html += `</div>`;
   c.innerHTML = html;
+  renderSeizoensoverzicht();
 
   const zoekInput = document.getElementById('leden-zoek-input');
   if(zoekInput && ledenZoekTerm){
     zoekInput.focus();
     zoekInput.setSelectionRange(zoekInput.value.length, zoekInput.value.length);
   }
+}
+
+// Vult #seizoensoverzicht-box (los van de rest van renderLeden, zie daar)
+// met het seizoensoverzicht Bridge & Dineren. Haalt per afgeronde speeldag
+// dezelfde tellingen op als de Horecalijst/Speeldagen (berekenAvondTellingen)
+// -- dus inclusief invallers en Golfdashboard-gasten in de totalen, net als
+// overal elders in de app.
+async function renderSeizoensoverzicht(){
+  const box = document.getElementById('seizoensoverzicht-box');
+  if(!box) return;
+  const seizoen = huidigSeizoen();
+  if(!seizoen){
+    box.innerHTML = '';
+    return;
+  }
+
+  const vandaag = vandaagISO();
+  const afgerond = seizoen.speelavonden.filter(a=>a.datum < vandaag);
+  if(!afgerond.length){
+    box.innerHTML = `<div class="seizoen-kaart">
+        <div class="seizoen-kaart-titel">Seizoen ${seizoen.label}</div>
+        <div class="sub">Nog geen afgeronde speeldagen dit seizoen.</div>
+      </div>`;
+    return;
+  }
+
+  box.innerHTML = `<div class="seizoen-kaart"><div class="seizoen-kaart-titel">Seizoen ${seizoen.label}</div><div class="sub">Bezig met laden...</div></div>`;
+
+  const tellingen = await Promise.all(afgerond.map(a=>berekenAvondTellingen(a.id)));
+
+  // Als het seizoen inmiddels niet meer "huidig" is (bv. een nieuwe
+  // speelavond toegevoegd tijdens het laden) niet meer in een verouderd
+  // element schrijven.
+  const boxNu = document.getElementById('seizoensoverzicht-box');
+  if(!boxNu) return;
+
+  const totaalBridge = tellingen.reduce((s,t)=>s+t.aanmeldingen, 0);
+  const totaalDiner = tellingen.reduce((s,t)=>s+t.horeca, 0);
+  const gemBridge = (totaalBridge / afgerond.length).toFixed(1);
+  const gemDiner = (totaalDiner / afgerond.length).toFixed(1);
+
+  boxNu.innerHTML = `<div class="seizoen-kaart">
+      <div class="seizoen-kaart-titel">Seizoen ${seizoen.label}</div>
+      <div class="seizoen-regel" onclick="toonSeizoenPersonen('bridge')">Totaal aantal bridgers: <b>${totaalBridge}</b></div>
+      <div class="seizoen-regel-sub">Gemiddelde: ${gemBridge} per speeldag (${afgerond.length} afgeronde speeldagen)</div>
+      <div class="seizoen-scheiding"></div>
+      <div class="seizoen-regel" onclick="toonSeizoenPersonen('diner')">Totaal aantal diner: <b>${totaalDiner}</b></div>
+      <div class="seizoen-regel-sub">Gemiddelde: ${gemDiner} per speeldag (${afgerond.length} afgeronde speeldagen)</div>
+    </div>`;
+}
+
+// Pop-up achter een van de twee Totalen op het seizoensoverzicht: per lid
+// het aantal keer bridgen/dineren deze seizoen, meeste deelname bovenaan.
+// Telt uitsluitend leden met een vaste naam -- invallers (bewust anoniem,
+// zie deel 55) en Golfdashboard "Niet-Bridge"-namen (geen lid-koppeling)
+// zitten wel in het TOTAAL op de kaart hierboven, maar kunnen hier niet als
+// naam worden opgesomd.
+async function toonSeizoenPersonen(soort){
+  const modal = document.getElementById('seizoenPersonenModal');
+  const el = document.getElementById('seizoenPersonenModal-inhoud');
+  modal.classList.remove('hidden');
+  el.innerHTML = '<p class="sub">Bezig met laden...</p>';
+
+  const seizoen = huidigSeizoen();
+  if(!seizoen){ el.innerHTML = '<p class="sub">Geen seizoen gevonden.</p>'; return; }
+  const vandaag = vandaagISO();
+  const afgerond = seizoen.speelavonden.filter(a=>a.datum < vandaag);
+
+  await Promise.all(afgerond.map(a=>loadAanwezigheidVoorAvond(a.id)));
+  if(document.getElementById('seizoenPersonenModal').classList.contains('hidden')) return; // ondertussen gesloten
+
+  const tellingPerLid = {};
+  afgerond.forEach(a=>{
+    (aanwezigheidCache[a.id] || []).forEach(r=>{
+      const telt = soort==='bridge' ? r.aanwezig===true : r.diner===true;
+      if(!telt) return;
+      tellingPerLid[r.lid_id] = (tellingPerLid[r.lid_id] || 0) + 1;
+    });
+  });
+
+  const rijen = Object.entries(tellingPerLid)
+    .map(([lidId, aantal])=>({ naam: naamVan(lidId), aantal }))
+    .sort((a,b)=> b.aantal - a.aantal || a.naam.localeCompare(b.naam));
+
+  const titel = soort==='bridge' ? 'Aantal keer gebridged' : 'Aantal keer mee gegeten';
+  el.innerHTML = `<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+      <div style="font-weight:600">${titel} -- seizoen ${seizoen.label}</div>
+      <button class="btn btn-sm" onclick="sluitSeizoenPersonenModal()">Sluiten</button>
+    </div>
+    ${rijen.length ? rijen.map(r=>`<div class="sterkte-rij"><span style="flex:1">${r.naam}</span><b>${r.aantal}&times;</b></div>`).join('') : '<p class="sub">Niemand gevonden.</p>'}
+    <p class="sub" style="margin-top:10px">Telt alleen leden met een vaste naam -- invallers en Golfdashboard-gasten tellen wel mee in het totaal op de kaart, maar staan hier niet apart genoemd.</p>`;
+}
+
+function sluitSeizoenPersonenModal(){
+  document.getElementById('seizoenPersonenModal').classList.add('hidden');
+}
+
+// ===========================================================
+// STERKTELIJST (admin)
+// ===========================================================
+// Deel 142, Kay's verzoek: de sterktelijst-rangorde terug als eigen,
+// sleepbare tab (zoals vóór deel 86), i.p.v. het invulveld dat deel 138 kort
+// in Admin > Leden had gezet.
+// Deel 144, Kay's correctie: dit was hier eerst per lijn in vier losse
+// kolommen opgedeeld (elk weer bij 1 beginnend) -- dat was fout. Er is maar
+// ÉÉN club-brede sterktelijst (zie ook de toelichting bij
+// berekenSterkteRang hierboven), dus nu één enkele, doorlopende lijst van
+// alle leden met een echte lijn (A/B/C/S) samen, gesorteerd op
+// sterk_positie. De lijn-letter staat als klein label vóór de naam, puur
+// ter referentie -- 'K' (koffertje-lid) en 'I' (invaller-beschikbaar) zijn
+// geen echte speelsterktelijn en staan hier daarom niet in.
+// Deel 146, Kay's vraag: ja, een zoekveld hoorde hierbij -- de CSS-klasse
+// voor het wis-knopje (.zoek-wis-knop, zie deel 61) noemde "Sterktelijst"
+// destijds al uitdrukkelijk als bedoeld hergebruik, dus dat klopt met haar
+// herinnering. Zelfde opzet als het zoekveld bij Admin > Indeling
+// (filterAanwezigZoek/aanwezigZoekTerm): het rangcijfer blijft tijdens het
+// zoeken de ECHTE plek in de volledige lijst tonen (niet hernummerd naar de
+// gefilterde subset), zodat je meteen ziet waar iemand staat zonder te
+// moeten scrollen. Slepen is bewust uitgezet tijdens zoeken (zelfde
+// zoekActief-aanpak als elders) -- een gefilterde subset herordenen zou
+// onduidelijk zijn over waar iemand werkelijk terechtkomt.
+function renderSterktelijst(){
+  const c = document.getElementById('sterktelijst-content');
+  const volledigeLijst = leden.filter(l=>ECHTE_LIJNEN.includes(l.speelsterkte))
+    .sort((a,b)=>((a.sterkte_positie||0)-(b.sterkte_positie||0)) || a.voornaam.localeCompare(b.voornaam));
+
+  const zoekActief = sterktelijstZoekTerm.length > 0;
+  const matcht = l => `${l.voornaam} ${l.achternaam}`.toLowerCase().includes(sterktelijstZoekTerm);
+
+  let rijenHtml;
+  if(!volledigeLijst.length){
+    rijenHtml = '<div class="empty">Nog geen leden met een lijn (A/B/C/S).</div>';
+  } else {
+    const zichtbaar = volledigeLijst
+      .map((l, idx) => ({ l, rang: idx + 1 }))
+      .filter(({l}) => !zoekActief || matcht(l));
+    if(!zichtbaar.length){
+      rijenHtml = '<div class="empty">Geen leden gevonden.</div>';
+    } else {
+      rijenHtml = `<div class="sterktelijst-lijst">${zichtbaar.map(({l, rang})=>`
+          <div class="sterkte-rij" data-lid-id="${l.id}">
+            <span class="sterkte-nr">${rang}</span>
+            <span class="badge badge-muted" style="flex-shrink:0;width:20px;justify-content:center;padding:2px 0" title="Lijn">${l.speelsterkte}</span>
+            <span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${l.voornaam} ${l.achternaam}</span>
+            ${zoekActief ? '' : '<span class="drag-handle sterkte-drag-handle" title="Sleep om de volgorde aan te passen">⠿</span>'}
+          </div>`).join('')}</div>`;
+    }
+  }
+
+  c.innerHTML = `<p class="sub" style="margin-bottom:10px">Eén doorlopende sterktelijst voor alle lijnen samen -- sleep een naam omhoog of omlaag. Alleen zichtbaar voor Admin.</p>
+    <div style="max-width:420px">
+      <div style="position:relative;margin-bottom:10px">
+        <input id="sterktelijst-zoek-input" style="width:100%;padding-right:32px" placeholder="Zoek een lid..." value="${sterktelijstZoekTerm}" oninput="filterSterktelijstZoek(this.value)">
+        <button type="button" class="zoek-wis-knop${zoekActief ? '' : ' hidden'}" onclick="wisSterktelijstZoek()" title="Zoekopdracht wissen" aria-label="Zoekopdracht wissen">&times;</button>
+      </div>
+      ${zoekActief ? '<p class="sub" style="margin-bottom:8px">Tijdens zoeken kun je niet slepen -- wis de zoekopdracht om de volgorde aan te passen.</p>' : ''}
+      ${rijenHtml}
+    </div>`;
+
+  if(!zoekActief){
+    c.querySelectorAll('.sterkte-drag-handle').forEach(handle=>{
+      const rij = handle.closest('.sterkte-rij');
+      handle.addEventListener('pointerdown', e=>startSterkteDrag(e, rij));
+    });
+  }
+
+  const zoekInput = document.getElementById('sterktelijst-zoek-input');
+  if(zoekInput && sterktelijstZoekTerm){
+    zoekInput.focus();
+    zoekInput.setSelectionRange(zoekInput.value.length, zoekInput.value.length);
+  }
+}
+
+function filterSterktelijstZoek(waarde){
+  sterktelijstZoekTerm = waarde.toLowerCase();
+  renderSterktelijst();
+}
+
+// Deel 61, zelfde patroon als wisAanwezigZoek: hergebruikt filterSterktelijstZoek('').
+function wisSterktelijstZoek(){
+  filterSterktelijstZoek('');
 }
 
 // ===========================================================
@@ -3835,6 +4168,107 @@ function startParenVolgordeDrag(e, kaart){
   document.addEventListener('pointerup', onUp);
 }
 
+// Sleept een lid omhoog/omlaag in de ÉNE sterktelijst (deel 142, gecorrigeerd
+// in deel 144 -- zie berekenSterkteRang hierboven) om de sterk_positie-
+// volgorde aan te passen. Zelfde sleep-mechaniek (ghost-element + randscroll)
+// als hierboven bij de andere sleepfuncties. Er is hier nog maar één lijst
+// (geen aparte kolommen meer per lijn), dus de rij blijft altijd binnen
+// diezelfde .sterktelijst-lijst -- van lijn wisselen (A/B/C/S) gebeurt via
+// het "Lijn"-veld in Admin > Leden, niet door hier te slepen.
+function startSterkteDrag(e, rij){
+  e.preventDefault();
+  e.stopPropagation();
+  const list = rij.parentElement;
+  const rect = rij.getBoundingClientRect();
+  const grabOffsetX = e.clientX - rect.left;
+  const grabOffsetY = e.clientY - rect.top;
+  let lastX = e.clientX, lastY = e.clientY;
+
+  const ghost = rij.cloneNode(true);
+  ghost.classList.add('sterkte-ghost');
+  ghost.style.width = rect.width + 'px';
+  ghost.style.left = rect.left + 'px';
+  ghost.style.top = rect.top + 'px';
+  document.body.appendChild(ghost);
+  rij.classList.add('sterkte-placeholder');
+
+  const update = ()=>{
+    ghost.style.left = (lastX - grabOffsetX) + 'px';
+    ghost.style.top = (lastY - grabOffsetY) + 'px';
+
+    const siblings = [...list.children].filter(r=>r!==rij);
+    let voorSib = null;
+    for(const sib of siblings){
+      const r = sib.getBoundingClientRect();
+      const sibMid = r.top + r.height/2;
+      if(lastY < sibMid){ voorSib = sib; break; }
+    }
+    if(voorSib){
+      if(rij.nextSibling !== voorSib) list.insertBefore(rij, voorSib);
+    } else if(list.lastElementChild !== rij){
+      list.appendChild(rij);
+    }
+    renumberSterktelijst(list);
+  };
+
+  const stopAutoScroll = startEdgeAutoScroll(()=>lastY, update);
+
+  const onMove = (ev)=>{
+    lastX = ev.clientX;
+    lastY = ev.clientY;
+    update();
+  };
+
+  const onUp = async ()=>{
+    document.removeEventListener('pointermove', onMove);
+    document.removeEventListener('pointerup', onUp);
+    stopAutoScroll();
+    ghost.remove();
+    rij.classList.remove('sterkte-placeholder');
+
+    const orderedIds = [...list.children].map(r=>r.dataset.lidId);
+    await persistSterktelijstVolgorde(orderedIds);
+  };
+
+  document.addEventListener('pointermove', onMove);
+  document.addEventListener('pointerup', onUp);
+}
+
+// Herberekent, voor één .sterktelijst-lijst, het volgnummer (1, 2, 3, ...)
+// op basis van de huidige positie in de DOM. Puur visueel, zelfde aanpak als
+// renumberParenLijsten hierboven -- wordt tijdens het slepen na elke
+// verplaatsing opnieuw aangeroepen zodat de nummers live meebewegen.
+function renumberSterktelijst(list){
+  let i = 0;
+  [...list.children].forEach(rij=>{
+    if(!rij.classList || !rij.classList.contains('sterkte-rij')) return;
+    i++;
+    const nr = rij.querySelector('.sterkte-nr');
+    if(nr) nr.textContent = i;
+  });
+}
+
+// Slaat de nieuwe volgorde op: nummert de ÉNE sterktelijst opnieuw 1..N in
+// de volgorde van orderedIds (alle leden met een echte lijn, A/B/C/S, samen
+// -- zie de correctie in deel 144 bij berekenSterkteRang hierboven). Sluit
+// precies aan op hoe addLid een nieuw lid altijd al behandelde: de hoogste
+// sterk_positie van IEDEREEN + 1, ongeacht lijn.
+async function persistSterktelijstVolgorde(orderedIds){
+  const updates = orderedIds.map((id, idx) => ({ id, sterkte_positie: idx + 1 }));
+  const resultaten = await Promise.all(updates.map(u =>
+    db.from('leden').update({ sterkte_positie: u.sterkte_positie }).eq('id', u.id)
+  ));
+  if(resultaten.some(r=>r.error)){
+    toast('Rangorde bijwerken mislukt');
+    renderSterktelijst();
+    return;
+  }
+  updates.forEach(u=>{
+    const l = leden.find(x=>x.id===u.id);
+    if(l) l.sterkte_positie = u.sterkte_positie;
+  });
+}
+
 function toggleAanwezigGroep(groep){
   aanwezigGroepOpen[groep] = !aanwezigGroepOpen[groep];
   renderAanwezigContent();
@@ -4088,8 +4522,9 @@ function bepaalEffectieveGroepVoorLid(avondId, lidId){
 // gebruikt in Admin > Indeling en de PDF (persoonRijHtml, niet deze
 // alleen-lezen variant persoonRijHtmlLezen). Deze functie wordt uitsluitend
 // aangeroepen door paarHtmlLezen/singleHtmlLezen, die op hun beurt
-// uitsluitend door eigenLijnIndelingHtml (de gepubliceerde "Mijn
-// Indeling"-pagina) gebruikt worden -- raakt dus verder niets.
+// uitsluitend door volledigeIndelingHtml (sinds deel 139, voorheen
+// eigenLijnIndelingHtml -- de gepubliceerde "Mijn Indeling"-pagina) gebruikt
+// worden -- raakt dus verder niets.
 function persoonRijHtmlLezen(persoon, eigenId){
   const eigen = persoon.id === eigenId;
   if(persoon.isInvaller){
@@ -4191,15 +4626,28 @@ async function renderIndelingContent(){
 
   // Gefaseerde weergave (deel 56, Kay's verzoek): meer dan 6 dagen (6x24 uur)
   // van tevoren gedraagt deze pagina zich zoals voorheen (nog niets, of zodra
-  // gepubliceerd meteen de eigen lijn). Vanaf 6 dagen tot 1 dag (24 uur) van
-  // tevoren toont de pagina altijd een alfabetische "Voorlopige
+  // gepubliceerd meteen de volledige indeling). Vanaf 6 dagen tot 1 dag (24
+  // uur) van tevoren toont de pagina altijd een alfabetische "Voorlopige
   // aanmeldingen"-lijst, ongeacht publicatiestatus. In het laatste etmaal
-  // toont de pagina de eigen lijn (inclusief wedstrijdleider) zodra
+  // toont de pagina de volledige indeling (inclusief wedstrijdleiders) zodra
   // gepubliceerd, en blijft anders bij dezelfde "Voorlopige aanmeldingen"-
   // lijst — en wisselt daar live tussen (via de bestaande 30s-polling,
   // pollIndeling) zodra de beheerder alsnog publiceert/depubliceert binnen
   // dat etmaal.
-  async function eigenLijnIndelingHtml(){
+  //
+  // Deel 139, Kay's verzoek: leden zien hier voortaan de VOLLEDIGE indeling
+  // (alle lijnen), niet meer alleen hun eigen lijn. Hernoemd van
+  // eigenLijnIndelingHtml naar volledigeIndelingHtml (dekt de lading nu beter
+  // -- alleen binnen deze functie aangeroepen, dus geen andere aanroepplekken
+  // om aan te passen). Zelfde per-groep bouwblok als voorheen (kolomHtml
+  // hieronder, vrijwel ongewijzigd overgenomen), nu in een lus over alle
+  // lijnen i.p.v. voor precies de ene, voor dit lid berekende groep --
+  // bepaalEffectieveGroepVoorLid is daarmee hier niet meer nodig (de functie
+  // zelf blijft gewoon bestaan, voor het geval hij elders nog van pas komt).
+  // Zelfde GROEPEN+lege-groep-patroon als elders in de app (bv. de
+  // Afwezig-kolommen in Admin > Indeling): een vijfde kolom voor leden zonder
+  // ingevulde lijn, maar alleen als die daadwerkelijk voorkomt.
+  async function volledigeIndelingHtml(){
     await Promise.all([
       loadVoorkeurParenVoorAvond(avond.id),
       loadLosgekoppeldVoorAvond(avond.id),
@@ -4207,39 +4655,45 @@ async function renderIndelingContent(){
       loadParenGroepOverrideVoorAvond(avond.id),
       loadInvallersVoorAvond(avond.id)
     ]);
-    // Meestal de eigen speelsterktegroep, maar als het eigen paar voor deze
-    // avond naar een andere lijn is gesleept (zie startParenVolgordeDrag),
-    // dan de lijn waar het paar nu daadwerkelijk staat -- anders zou je
-    // jezelf hier niet terugvinden.
-    const groep = bepaalEffectieveGroepVoorLid(avond.id, l.id);
-    const { paren, singles } = berekenIndelingVoorGroep(avond.id, groep);
     const wedstrijdleiderRows = await loadWedstrijdleiderVoorAvond(avond.id);
     await loadWedstrijdleidersRoster();
-    const wlRow = wedstrijdleiderRows.find(r=>r.lijn===groep);
-    const wlLid = wlRow ? leden.find(x=>x.id===wlRow.lid_id) : null;
-    let h = `<div class="indeling-kolom">
-        <div class="indeling-kolom-header">${lijnGroepLabel(groep)}</div>`;
-    if(wlLid) h += `<div class="sub" style="padding:4px 2px 8px">Wedstrijdleider: <b>${wlLid.voornaam} ${wlLid.achternaam}</b></div>`;
-    if(!paren.length && !singles.length){
-      h += '<div class="empty" style="padding:0.5rem 0;font-size:12.5px">Geen resultaten.</div>';
-    } else {
-      paren.forEach((p,idx)=>{ h += paarHtmlLezen(p, l.id, idx+1); });
-      singles.forEach(s=>{ h += singleHtmlLezen(s, l.id); });
-    }
-    h += '</div>';
-    return h;
+
+    const recordMap = {};
+    records.forEach(r=>{ recordMap[r.lid_id] = r.aanwezig; });
+    const aangemeldLeden = leden.filter(x=>recordMap[x.id]===true);
+    const GROEPEN = ['A','B','C','S'];
+    if(aangemeldLeden.some(x=>!x.speelsterkte)) GROEPEN.push('');
+
+    const kolomHtml = (groep)=>{
+      const { paren, singles } = berekenIndelingVoorGroep(avond.id, groep);
+      const wlRow = wedstrijdleiderRows.find(r=>r.lijn===groep);
+      const wlLid = wlRow ? leden.find(x=>x.id===wlRow.lid_id) : null;
+      let h = `<div class="indeling-kolom">
+          <div class="indeling-kolom-header">${lijnGroepLabel(groep)}</div>`;
+      if(wlLid) h += `<div class="sub" style="padding:4px 2px 8px">Wedstrijdleider: <b>${wlLid.voornaam} ${wlLid.achternaam}</b></div>`;
+      if(!paren.length && !singles.length){
+        h += '<div class="empty" style="padding:0.5rem 0;font-size:12.5px">Geen resultaten.</div>';
+      } else {
+        paren.forEach((p,idx)=>{ h += paarHtmlLezen(p, l.id, idx+1); });
+        singles.forEach(s=>{ h += singleHtmlLezen(s, l.id); });
+      }
+      h += '</div>';
+      return h;
+    };
+
+    return `<div class="indeling-kolommen">${GROEPEN.map(kolomHtml).join('')}</div>`;
   }
 
   if(isAangemeld){
     const uren = urenTotAvondStart(avond);
     if(uren <= 24){
-      html += avond.gepubliceerd ? await eigenLijnIndelingHtml() : voorlopigeAanmeldingenHtml(records);
+      html += avond.gepubliceerd ? await volledigeIndelingHtml() : voorlopigeAanmeldingenHtml(records);
     } else if(uren <= 144){
       html += voorlopigeAanmeldingenHtml(records);
     } else if(!avond.gepubliceerd){
       html += '<div class="empty">Nog geen indeling bekend. Zodra de beheerder een speelavond heeft ingedeeld en gepubliceerd, verschijnt deze hier.</div>';
     } else {
-      html += await eigenLijnIndelingHtml();
+      html += await volledigeIndelingHtml();
     }
   } else {
     // Deel 123, n.a.v. Kay's screenshot (geïnstalleerde app toonde een groot
@@ -6605,6 +7059,10 @@ async function automatischeIndeling(avondId){
 // ===========================================================
 // SPEELAVONDEN (admin)
 // ===========================================================
+// Deel 140 had hier een "Aantal Bridge"/"Aantal Diner"-overzicht per
+// speelavond toegevoegd; deel 143, Kay's verzoek draait dat terug -- dat
+// overzicht staat voortaan als seizoenstotaal op Leden (zie
+// renderSeizoensoverzicht hierboven), niet meer per speelavond hier.
 function renderAvonden(){
   const tbody = document.getElementById('avonden-tbody');
   tbody.innerHTML = '';
@@ -9283,17 +9741,25 @@ document.getElementById('login-pincode').addEventListener('keydown', e=>{
 document.getElementById('admin-gebruikersnaam').addEventListener('keydown', e=>{
   if(e.key === 'Enter') document.getElementById('admin-wachtwoord').focus();
 });
-document.getElementById('admin-wachtwoord').addEventListener('keydown', e=>{
-  if(e.key === 'Enter') adminLogin();
-});
+// Deel 145, Kay's melding: heel even een rode foutmelding bij het inloggen
+// als beheerder, die vrijwel meteen weer verdwijnt omdat het inloggen zelf
+// wél slaagt. Oorzaak gevonden (geen aanname): sinds deel 127 staan
+// admin-wachtwoord/balie-wachtwoord/horeca-wachtwoord elk al in een echt
+// <form onsubmit="...Login(); ...">, waardoor Enter in dat veld de login al
+// afvuurt via de normale formulier-submit. Deze drie losse keydown-
+// listeners (uit een eerdere deel, van vóór de <form>-omzetting) riepen
+// dezelfde ...Login()-functie dus een TWEEDE keer aan op precies dezelfde
+// Enter-toets -- twee gelijktijdige login-aanroepen, waarvan er één de
+// server/sessie-opbouw van de ander voor de voeten liep en kortstondig op
+// een foutmelding uitkwam, terwijl de andere alsnog gewoon doorzette.
+// Weghalen van deze drie is genoeg: het omringende <form> regelt Enter-to-
+// submit al correct, hier is niets anders dan vertraagd dubbel vuren
+// verloren. (De naam-velden hierboven/-onder roepen bewust geen Login() aan
+// -- die verplaatsen alleen de focus -- en blijven daarom ongewijzigd. Het
+// speler-inlogscherm (login-pincode, zie hieronder) heeft geen omringend
+// <form> en dus dit probleem niet.)
 document.getElementById('balie-gebruikersnaam').addEventListener('keydown', e=>{
   if(e.key === 'Enter') document.getElementById('balie-wachtwoord').focus();
-});
-document.getElementById('balie-wachtwoord').addEventListener('keydown', e=>{
-  if(e.key === 'Enter') balieLogin();
-});
-document.getElementById('horeca-wachtwoord').addEventListener('keydown', e=>{
-  if(e.key === 'Enter') horecaLogin();
 });
 </script>
 </body>
