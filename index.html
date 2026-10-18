@@ -682,7 +682,7 @@
       </p>
     </div>
 
-    <p style="font-size:11px;color:var(--text-muted);text-align:center;margin-top:24px;line-height:1.6">&copy; 2026 VanDeLinde Consulting BV<br>v3.3.1</p>
+    <p style="font-size:11px;color:var(--text-muted);text-align:center;margin-top:24px;line-height:1.6">&copy; 2026 VanDeLinde Consulting BV<br>v3.6.1</p>
   </div>
 </div>
 
@@ -1000,12 +1000,33 @@
   </div>
 </div>
 
-<!-- Deel 47: bij een te lange adressenlijst voor één mailto:-link wordt de
-     mail in meerdere delen geopend, elk met een eigen klik (zie
-     mailtoNaarLeden/toonMailBatchStap hieronder) -->
-<div id="mailBatchModal" class="modal-overlay hidden" onclick="if(event.target===this) sluitMailBatchModal()">
+<!-- Deel 152, Kay's verzoek: concept van de Reminder-mail eerst in een groot,
+     bewerkbaar scherm tonen met een "Verzenden"-knop, i.p.v. meteen bij het
+     kiezen van de actie al klembord+mailprogramma aanroepen -- zie
+     stuurReminderMail/toonReminderMailModal/verstuurReminderMailVanuitModal. -->
+<div id="reminderMailModal" class="modal-overlay hidden" onclick="if(event.target===this) sluitReminderMailModal()">
+  <div class="modal-box" style="max-width:700px;width:96vw;max-height:90vh;overflow-y:auto;display:flex;flex-direction:column">
+    <div style="font-weight:600;margin-bottom:4px">Concept reminder-mail</div>
+    <p class="sub" style="margin-bottom:14px">Pas onderwerp en/of tekst hieronder eventueel aan. Bij "Verzenden" wordt de tekst naar het klembord gekopieerd en opent het mailprogramma met dit onderwerp en alle leden al in Bcc -- jij plakt de tekst zelf in de mail (Cmd/Ctrl+V).</p>
+    <label class="sub" style="display:block;margin-bottom:4px">Onderwerp</label>
+    <input type="text" id="reminderMail-onderwerp" style="width:100%;margin-bottom:14px;font-size:15px;color:var(--text);border:1px solid var(--border-strong);border-radius:var(--radius);padding:8px 12px">
+    <label class="sub" style="display:block;margin-bottom:4px">Tekst</label>
+    <textarea id="reminderMail-body" rows="16" style="width:100%;resize:vertical;font-family:inherit;font-size:15px;color:var(--text);border:1px solid var(--border-strong);border-radius:var(--radius);padding:10px 12px;flex:1"></textarea>
+    <div style="display:flex;gap:10px;margin-top:16px">
+      <button class="btn" style="flex:1;justify-content:center" onclick="sluitReminderMailModal()">Annuleren</button>
+      <button class="btn btn-primary" style="flex:1;justify-content:center" onclick="verstuurReminderMailVanuitModal()">Verzenden</button>
+    </div>
+  </div>
+</div>
+
+<!-- Deel 155, Kay's melding ("automatisch opstellen van e-mail geblokkeerd",
+     twee keer, verwarrend over twee tabs): mailto:-links worden niet meer
+     automatisch door JavaScript geopend, maar hier als echte, aanklikbare
+     linkjes getoond -- zie toonMailLinksModal/sluitMailLinksModal. Gedeeld
+     door zowel Mail Leden als de Reminder-mail. -->
+<div id="mailLinksModal" class="modal-overlay hidden" onclick="if(event.target===this) sluitMailLinksModal()">
   <div class="modal-box">
-    <div id="mailBatchModal-inhoud"></div>
+    <div id="mailLinksModal-inhoud"></div>
   </div>
 </div>
 
@@ -3253,93 +3274,103 @@ function kiesMailKeuze(keuze){
 // oplossing: bij een te lange lijst wordt die automatisch verdeeld in
 // meerdere kleinere, wél-passende "batches", en voor elke batch wordt een
 // eigen mail geopend met die adressen volledig (en uitsluitend) in Bcc — dus
-// geen adres hoeft ooit met de hand overgetypt of geplakt te worden. Bij
-// meerdere batches vraagt de app per batch een klik (zie toonMailBatchStap/
-// openVolgendeMailBatch hieronder), omdat browsers een mailto:-link alleen
-// betrouwbaar openen als directe reactie op een gebruikersklik — meerdere
-// mailto:-links automatisch achter elkaar openen zonder tussenklik wordt door
-// sommige browsers/mailprogramma's genegeerd of geblokkeerd.
+// geen adres hoeft ooit met de hand overgetypt of geplakt te worden.
+// Deel 147/155: voorheen probeerde de app batches automatisch na elkaar te
+// openen (window.location.href/window.open) -- Safari ziet een met
+// JavaScript geopende mailto:-link als "automatisch" en blokkeert 'm met een
+// eigen meldingen, wat bij twee batches ook nog eens verspreid over twee
+// tabs verscheen (verwarrend, zie Kay's melding). Daarom nu, net als bij de
+// Reminder-mail: alleen de benodigde mailto:-URL(s) berekenen
+// (berekenMailUrls) en als echte, aanklikbare linkjes tonen
+// (toonMailLinksModal) -- een directe klik telt niet als "automatisch".
 function mailtoNaarLeden(ledenLijst){
   const metEmail = ledenLijst.filter(l=>l.email && l.email.trim());
   if(!metEmail.length){ toast('Geen e-mailadressen gevonden bij deze leden'); return; }
   const to = afzendEmailBridgecommissie();
   const adressen = metEmail.map(l=>l.email.trim());
   const zonderEmail = ledenLijst.length - metEmail.length;
+  const { urls, teLang } = berekenMailUrls(`mailto:${to}`, adressen);
+  if(teLang){
+    toast('Kon geen mail openen: de adressenlijst is zelfs in twee helften gesplitst nog te lang. Neem contact op als dit blijft gebeuren.');
+    return;
+  }
+  const inleiding = urls.length > 1
+    ? `Adressenlijst is te lang voor één mail — klik beide linkjes hieronder om alle ${metEmail.length} leden te bereiken (samen in Bcc verdeeld)${zonderEmail>0?`. (${zonderEmail} leden zonder e-mailadres overgeslagen.)`:'.'}`
+    : `Klik om de mail te openen, met alle ${metEmail.length} leden in Bcc${zonderEmail>0?` (${zonderEmail} zonder e-mailadres overgeslagen)`:''}.`;
+  toonMailLinksModal(urls, inleiding);
+}
+
+// Bouwt de volledige mailto:-URL voor één batch: urlPrefix is alles vóór de
+// Bcc-adressen (bv. "mailto:to" of "mailto:to?subject=...&body=..."), zodat
+// onderwerp/body (indien aanwezig) in elke batch identiek meekomen — alleen
+// de Bcc-adressen verschillen per batch.
+function buildMailtoUrl(urlPrefix, adressen){
+  const scheiding = urlPrefix.includes('?') ? '&' : '?';
+  return `${urlPrefix}${scheiding}bcc=${encodeURIComponent(adressen.join(','))}`;
+}
+
+// Deel 149, Kay's expliciete correctie op deel 147/148 ("ik wil geen batch!
+// Ik wil maximaal twee mails"): het vorige, dynamische "zoveel batches als
+// nodig" idee (verdeelInMailBatches, inmiddels vervallen) leidde bij een
+// lange body (zoals bij de Reminder-mail, met de volledige spelerslijst
+// erin) tot wiskundig correcte maar praktisch onbruikbare uitkomsten -- bij
+// ~100+ leden dus ~100+ losse mailvensters in één keer (zie deel 148). Op
+// Kay's uitdrukkelijke verzoek is dat nu vervangen door een vast, voorspelbaar
+// gedrag: past de hele adressenlijst niet in één mailto:-link, dan wordt de
+// lijst in PRECIES TWEE gelijke helften gesplitst -- nooit meer dan twee
+// mails, punt. Past zelfs een helft niet (omdat de meegestuurde tekst zelf al
+// te lang is), dan is dat niet op te lossen door meer te splitsen -- de
+// aanroeper laat in dat geval niets openen en toont een duidelijke melding
+// dat de tekst zelf moet worden ingekort.
+//
+// Deel 155, bugfix op Kay's melding "ik krijg de melding 'automatisch
+// opstellen van e-mail is geblokkeerd' twee keer, verwarrend verspreid over
+// twee tabs": deze functie deed voorheen zelf de navigatie (window.location.
+// href / window.open), en dat is precies wat Safari als "automatisch" ziet
+// en blokkeert -- een mailto:-link die met JavaScript wordt geopend in
+// plaats van door een echte klik op een linkje. Vandaar nu een zuivere
+// berekenfunctie zonder enige navigatie: die geeft alleen de benodigde
+// mailto:-URL(s) terug (1 of 2), en de aanroeper toont die als echte,
+// aanklikbare <a href="mailto:...">-linkjes (zie toonMailLinksModal
+// hieronder) -- een directe klik op een echt linkje geldt niet als
+// "automatisch" en wordt dus niet geblokkeerd, en beide linkjes staan
+// bovendien gewoon samen in één scherm i.p.v. verspreid over tabs.
+function berekenMailUrls(urlPrefix, adressen){
   const VEILIGE_LENGTE = 1800;
-  const url = `mailto:${to}?bcc=${encodeURIComponent(adressen.join(','))}`;
-
-  if(url.length <= VEILIGE_LENGTE){
-    window.location.href = url;
-    if(zonderEmail > 0) toast(`Mail geopend voor ${metEmail.length} leden (${zonderEmail} zonder e-mailadres overgeslagen)`);
-    return;
+  const volledigeUrl = buildMailtoUrl(urlPrefix, adressen);
+  if(volledigeUrl.length <= VEILIGE_LENGTE){
+    return { urls: [volledigeUrl] };
   }
 
-  // Te veel adressen voor één mailto:-link — verdelen over meerdere mails
-  // die elk wél onder de limiet blijven (zie toelichting hierboven).
-  const batches = verdeelInMailBatches(adressen, VEILIGE_LENGTE, to);
-  mailBatchState = {to, batches, index: 0, zonderEmail};
-  toonMailBatchStap();
+  const helft = Math.ceil(adressen.length / 2);
+  const batches = [adressen.slice(0, helft), adressen.slice(helft)];
+  const urls = batches.map(batch => buildMailtoUrl(urlPrefix, batch));
+  if(urls.some(u => u.length > VEILIGE_LENGTE)){
+    return { urls: [], teLang: true };
+  }
+  return { urls };
 }
 
-// Verdeelt een lijst adressen in zo min mogelijk groepen, waarbij elke groep
-// (inclusief het "to"-adres en de mailto:-opbouw) onder de veilige lengte
-// blijft. Simpele greedy-aanpak: adressen één voor één toevoegen aan de
-// huidige groep totdat de resulterende URL te lang zou worden, dan een
-// nieuwe groep beginnen.
-function verdeelInMailBatches(adressen, veiligeLengte, to){
-  const batches = [];
-  let huidige = [];
-  for(const adres of adressen){
-    const kandidaat = [...huidige, adres];
-    const url = `mailto:${to}?bcc=${encodeURIComponent(kandidaat.join(','))}`;
-    if(url.length > veiligeLengte && huidige.length){
-      batches.push(huidige);
-      huidige = [adres];
-    } else {
-      huidige = kandidaat;
-    }
-  }
-  if(huidige.length) batches.push(huidige);
-  return batches;
-}
-
-// Bewaart de voortgang van een lopende meerdelige mailactie (zie hierboven).
-let mailBatchState = null; // {to, batches, index, zonderEmail}
-
-function toonMailBatchStap(){
-  const st = mailBatchState;
-  if(!st) return;
-  const totaal = st.batches.length;
-  const inhoud = document.getElementById('mailBatchModal-inhoud');
-  if(st.index >= totaal){
-    const totaalAdressen = st.batches.reduce((n,b)=>n+b.length,0);
-    inhoud.innerHTML = `
-      <div style="font-weight:600;margin-bottom:8px">Klaar</div>
-      <p class="sub" style="margin-bottom:16px">Alle ${totaal} mail${totaal===1?'':'s'} ${totaal===1?'is':'zijn'} geopend, samen goed voor alle ${totaalAdressen} e-mailadressen in Bcc.${st.zonderEmail>0?` (${st.zonderEmail} leden zonder e-mailadres overgeslagen.)`:''}</p>
-      <button class="btn btn-primary" style="width:100%;justify-content:center" onclick="sluitMailBatchModal()">Sluiten</button>`;
-    return;
-  }
-  const nummer = st.index + 1;
+// Toont 1 of 2 echte, aanklikbare mailto:-linkjes in een eigen modal, in
+// plaats van de mail(s) automatisch (en dus, in Safari, geblokkeerd) te
+// openen. inleidingTekst staat erboven (bv. met een plak-herinnering voor de
+// Reminder-mail, of leeg voor Mail Leden). target="_blank" op elk linkje
+// zodat de app zelf nooit navigeert/verdwijnt, ongeacht hoeveel linkjes er
+// zijn.
+function toonMailLinksModal(urls, inleidingTekst){
+  const inhoud = document.getElementById('mailLinksModal-inhoud');
+  const linkjes = urls.length === 1
+    ? `<a class="btn btn-primary" style="width:100%;justify-content:center" href="${urls[0]}" target="_blank" onclick="setTimeout(sluitMailLinksModal, 300)">Open mail</a>`
+    : urls.map((u,i)=>`<a class="btn btn-primary" style="width:100%;justify-content:center;margin-bottom:8px" href="${u}" target="_blank">Open mail ${i+1} van ${urls.length}</a>`).join('');
   inhoud.innerHTML = `
-    <div style="font-weight:600;margin-bottom:8px">Mail ${nummer} van ${totaal}</div>
-    <p class="sub" style="margin-bottom:16px">Deze lijst met adressen is te lang voor één mail-link. Daarom wordt de mail in ${totaal} delen geopend — elk deel bevat een volledige, eigen groep adressen in Bcc, niets hoeft handmatig geplakt te worden. Klik om mail ${nummer} te openen.</p>
-    <button class="btn btn-primary" style="width:100%;justify-content:center" onclick="openVolgendeMailBatch()">Open mail ${nummer} van ${totaal}</button>`;
-  document.getElementById('mailBatchModal').classList.remove('hidden');
+    ${inleidingTekst ? `<p class="sub" style="margin-bottom:14px">${inleidingTekst}</p>` : ''}
+    <div style="display:flex;flex-direction:column">${linkjes}</div>
+    <button class="btn btn-sm" style="width:100%;justify-content:center;margin-top:10px" onclick="sluitMailLinksModal()">Sluiten</button>`;
+  document.getElementById('mailLinksModal').classList.remove('hidden');
 }
 
-function openVolgendeMailBatch(){
-  const st = mailBatchState;
-  if(!st || st.index >= st.batches.length) return;
-  const batch = st.batches[st.index];
-  const url = `mailto:${st.to}?bcc=${encodeURIComponent(batch.join(','))}`;
-  window.open(url, '_blank');
-  st.index += 1;
-  toonMailBatchStap();
-}
-
-function sluitMailBatchModal(){
-  document.getElementById('mailBatchModal').classList.add('hidden');
-  mailBatchState = null;
+function sluitMailLinksModal(){
+  document.getElementById('mailLinksModal').classList.add('hidden');
 }
 
 async function updateLidField(id, field, value){
@@ -4992,6 +5023,7 @@ async function renderAanwezigContent(){
           <option value="wis">Indeling wissen</option>
           <option value="invaller">Invaller toevoegen</option>
           <option value="printpdf">Indeling afdrukken</option>
+          <option value="reminder">Reminder mailen</option>
           <option value="horeca">Horecalijst</option>
         </select>
       </div>
@@ -6295,6 +6327,155 @@ async function wisIndeling(avondId){
   toast('Indeling gewist');
 }
 
+// Probeert tekst naar het klembord te kopiëren; valt terug op een prompt()
+// (tekst staat klaar om handmatig te selecteren/kopiëren) als de
+// Clipboard-API faalt -- dat kan gebeuren omdat er, door de await's hierboven
+// (data ophalen uit Supabase) vóór de kopieeractie, soms te veel tijd zit
+// tussen de klik van de beheerder en deze aanroep, waardoor sommige browsers
+// (met name Safari) de toestemming voor automatisch klembordgebruik niet meer
+// geven. Geeft true terug als het automatisch kopiëren is gelukt.
+async function kopieerNaarKlembord(tekst){
+  try{
+    await navigator.clipboard.writeText(tekst);
+    return true;
+  } catch(err){
+    window.prompt('Kon niet automatisch naar het klembord kopiëren -- selecteer onderstaande tekst en kopieer die handmatig (Cmd/Ctrl+C):', tekst);
+    return false;
+  }
+}
+
+// Deel 147, Kay's verzoek: "Reminder mailen" in het Acties-menu van Admin >
+// Indeling, na "Indeling afdrukken".
+// Deel 150/151: eerdere pogingen probeerden de hele mailtekst (onderwerp +
+// body, incl. de volledige spelerslijst) in de mailto:-link zelf te stoppen,
+// samen met alle leden in Bcc. Dat loopt voor elk realistisch ledenaantal
+// vast op de ~1800-tekens-grens van een mailto:-link (zie deel 148/150) --
+// de spelerslijst en de Bcc-lijst groeien allebei mee met de drukte van de
+// club en vechten om dezelfde beperkte ruimte. Kay's eigen eerder verstuurde
+// voorbeeldmail (met een nog veel langere tekst én de volledige lijst) bleek
+// gewoon getypt/geplakt te zijn in het mailprogramma zelf -- geen
+// mailto:-link, dus zonder die lengtegrens.
+// Deel 152, Kay's concrete UX-voorstel: niet meteen bij het kiezen van
+// "Reminder mailen" al klembord+mailprogramma aanroepen, maar eerst het
+// concept in een groot, bewerkbaar scherm tonen met een eigen "Verzenden"-
+// knop -- zie toonReminderMailModal/verstuurReminderMailVanuitModal
+// hieronder. stuurReminderMail hierbeneden bouwt alleen het concept en toont
+// de modal; het daadwerkelijke kopiëren+mailen gebeurt pas bij die
+// "Verzenden"-klik.
+async function stuurReminderMail(avondId){
+  const avond = speelavonden.find(a=>a.id===avondId) || bepaalEerstvolgendeSpeelavond();
+  if(!avond){ toast('Geen eerstvolgende speelavond gevonden'); return; }
+  const datumTekst = fmtDatumVol(avond.datum);
+
+  const [records, invallerRows, tellingen] = await Promise.all([
+    loadAanwezigheidVoorAvond(avond.id),
+    loadInvallersVoorAvond(avond.id),
+    berekenAvondTellingen(avond.id)
+  ]);
+
+  // Deel 154, Kay's verzoek: de horeca-icoontjes (🍴, deel 151) weer weg --
+  // alleen nog de kale namenlijst.
+  const spelers = [];
+  records.filter(r=>r.aanwezig===true).forEach(r=>{
+    const lid = leden.find(l=>l.id===r.lid_id);
+    if(!lid) return;
+    spelers.push({ voornaam: lid.voornaam, achternaam: lid.achternaam });
+  });
+  // Invallers tellen ook mee in "aanmeldingen" (zie berekenAvondTellingen) en
+  // horen daarom ook in deze lijst, met dezelfde naamweergave als elders
+  // (invallerLabel) -- een naamloze Invaller heeft dan ook geen achternaam.
+  invallerRows.forEach(row=>{
+    spelers.push({ voornaam: invallerLabel(row, invallerRows), achternaam: '' });
+  });
+  spelers.sort((a,b)=> a.voornaam.localeCompare(b.voornaam,'nl') || a.achternaam.localeCompare(b.achternaam,'nl'));
+  const spelerRegels = spelers.length
+    ? spelers.map(s=>`${s.voornaam}${s.achternaam ? ' '+s.achternaam : ''}`).join('\n')
+    : 'Nog geen aanmeldingen';
+
+  const onderwerp = `Tot nu toe aangemelde bridgers voor ${datumTekst}`;
+  // Body-tekst letterlijk zoals Kay die heeft aangeleverd, incl. het
+  // e-mailadres goyerbridge@goyer.nl zoals zij dat typte (dat wijkt af van
+  // het elders in de app gebruikte goyerbridge@gmail.com -- zie de
+  // toelichting hierover in het antwoord aan Kay, niet stilzwijgend
+  // aangepast). Dit is nu een CONCEPT -- de beheerder kan het in de modal
+  // hieronder nog aanpassen vóór het versturen.
+  const body = [
+    'Beste bridgers,',
+    '',
+    `Voor ${datumTekst} hebben zich tot nu toe via de app ${tellingen.aanmeldingen} spelers aangemeld. Mocht je problemen ondervinden met de app, stuur dan even een mail naar goyerbridge@goyer.nl of een whatsapp naar Madelon Crol via 06-5062-8966. Dan helpen we je verder.`,
+    '',
+    'Met vriendelijke groet,',
+    'De Bridgecommissie',
+    '',
+    // Deel 154, Kay's verzoek: ":" achter de datum.
+    // Deel 156, Kay's verzoek: de onderstrepings-regel (liggende streepjes,
+    // deel 154) weer weg.
+    `Aangemeld voor ${datumTekst}:`,
+    spelerRegels
+  ].join('\n');
+
+  const to = afzendEmailBridgecommissie();
+  const adressen = ledenVoorAlleMail().filter(l=>l.email && l.email.trim()).map(l=>l.email.trim());
+  if(!adressen.length){ toast('Geen e-mailadressen gevonden'); return; }
+
+  toonReminderMailModal(to, onderwerp, body, adressen);
+}
+
+// Bewaart de ontvangers (to + Bcc-adressen) voor de open reminder-mail-modal,
+// want die zijn niet in het scherm zelf te bewerken (alleen onderwerp+tekst
+// zijn bedoeld als concept) en moeten bij "Verzenden" nog beschikbaar zijn.
+let reminderMailModalState = null; // {to, adressen}
+
+function toonReminderMailModal(to, onderwerp, body, adressen){
+  reminderMailModalState = { to, adressen };
+  document.getElementById('reminderMail-onderwerp').value = onderwerp;
+  document.getElementById('reminderMail-body').value = body;
+  document.getElementById('reminderMailModal').classList.remove('hidden');
+}
+
+function sluitReminderMailModal(){
+  document.getElementById('reminderMailModal').classList.add('hidden');
+  reminderMailModalState = null;
+}
+
+// Deel 152, Kay's gewenste volgorde: 1) concept in groot scherm, bewerkbaar,
+// met "Verzenden"-knop; 2) bij die klik automatisch de (eventueel aangepaste)
+// tekst kopiëren; 3) de beheerder plakt de tekst zelf en klikt zelf op het
+// linkje om de mail (of mails) te openen. Dat laatste is sinds deel 155 geen
+// automatische window.location.href/window.open meer (zie
+// berekenMailUrls/toonMailLinksModal hierboven) -- Safari blokkeerde dat met
+// een eigen "automatisch opstellen van e-mail"-melding, en bij twee mails
+// gebeurde dat ook nog eens verwarrend verspreid over twee tabs (Kay's
+// melding). Een echte klik op een linkje wordt niet geblokkeerd. Het plakken
+// zelf kan sowieso niet automatisch: eenmaal geopend is het mailprogramma een
+// aparte, eigen toepassing waar deze webpagina niet meer bij kan.
+async function verstuurReminderMailVanuitModal(){
+  const st = reminderMailModalState;
+  if(!st) return;
+  const onderwerp = document.getElementById('reminderMail-onderwerp').value.trim();
+  const body = document.getElementById('reminderMail-body').value;
+  if(!body.trim()){ toast('De mailtekst is leeg'); return; }
+
+  const gekopieerd = await kopieerNaarKlembord(body);
+
+  // urlPrefix bevat bewust GEEN body -- alleen to+subject (kort, dus
+  // betrouwbaar) + Bcc, met dezelfde beproefde aanpak als Mail Leden.
+  const urlPrefix = `mailto:${st.to}?subject=${encodeURIComponent(onderwerp)}`;
+  const { urls, teLang } = berekenMailUrls(urlPrefix, st.adressen);
+  sluitReminderMailModal();
+  if(teLang){
+    toast('Kon de reminder-mail niet openen: zelfs zonder de spelerslijst in de link is de ledenlijst te lang. Neem contact op als dit gebeurt.');
+    return;
+  }
+  const plakMelding = gekopieerd
+    ? 'Tekst is naar het klembord gekopieerd — plak die (Cmd/Ctrl+V) in de mail die opent.'
+    : 'Plak de tekst uit het eerder getoonde venster in de mail die opent.';
+  const inleiding = urls.length > 1
+    ? `Ledenlijst was te lang voor één mail — klik beide linkjes hieronder (samen bereiken ze alle leden in Bcc, met hetzelfde onderwerp). ${plakMelding} (in beide mails dezelfde tekst plakken.)`
+    : plakMelding;
+  toonMailLinksModal(urls, inleiding);
+}
+
 // Wordt aangeroepen vanuit de acties-dropdown boven de indeling (in plaats
 // van vier losse knoppen).
 function handleIndelingActie(actie, avondId){
@@ -6309,6 +6490,8 @@ function handleIndelingActie(actie, avondId){
   // Bridge-It-koppelingsonderzoek in het projectdocument). Roept dezelfde
   // drukIndelingAf aan die al sinds deel 29/53 bestaat, geen nieuwe PDF-code.
   else if(actie === 'printpdf') drukIndelingAf(avondId);
+  // Deel 147, Kay's verzoek: "Reminder mailen" direct na "Indeling afdrukken".
+  else if(actie === 'reminder') stuurReminderMail(avondId);
   else if(actie === 'auto') automatischeIndeling(avondId);
   else if(actie === 'husselen') husselIndeling(avondId);
   else if(actie === 'invaller') openInvallerToevoegenModal(avondId);
