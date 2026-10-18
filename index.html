@@ -682,7 +682,7 @@
       </p>
     </div>
 
-    <p style="font-size:11px;color:var(--text-muted);text-align:center;margin-top:24px;line-height:1.6">&copy; 2026 VanDeLinde Consulting BV<br>v3.7.0</p>
+    <p style="font-size:11px;color:var(--text-muted);text-align:center;margin-top:24px;line-height:1.6">&copy; 2026 VanDeLinde Consulting BV<br>v3.7.1</p>
   </div>
 </div>
 
@@ -1131,18 +1131,11 @@ function afzendEmailBridgecommissie(){
 // opstellen van elke mail vervangt door de echte waarden -- de beheerder
 // zet ze zelf ergens in de tekst neer (of laat ze weg, als die informatie
 // niet in de tekst hoeft).
-const STANDAARD_REMINDER_MAIL_TEKST = `Beste bridgers,
-
-Voor [DATUM] hebben zich tot nu toe via de app [AANTAL] spelers aangemeld. Mocht je problemen ondervinden met de app, stuur dan even een mail naar goyerbridge@goyer.nl of een whatsapp naar Madelon Crol via 06-5062-8966. Dan helpen we je verder.
-
-Met vriendelijke groet,
-De Bridgecommissie`;
-
-// Bij een nog leeg/onbewerkt veld (instellingen.reminder_mail_tekst) valt
-// dit terug op Kay's oorspronkelijk aangeleverde tekst hierboven -- dus geen
-// wijziging in gedrag zolang er in Admin > Admin nog niets is opgeslagen.
+// Deel 158, Kay's correctie ("leeg is leeg"): GEEN terugval op een
+// standaardtekst als het veld leeg is -- wat hier staat is wat gebruikt
+// wordt, letterlijk, zonder uitzondering.
 function reminderMailBasisTekst(){
-  return instellingen.reminder_mail_tekst || STANDAARD_REMINDER_MAIL_TEKST;
+  return instellingen.reminder_mail_tekst || '';
 }
 
 async function loadInstellingen(){
@@ -7673,7 +7666,7 @@ async function renderAdminPagina(){
          stuurReminderMail in de JS. -->
     <div class="card" style="max-width:560px">
       <div style="font-weight:600;margin-bottom:8px">Reminder-mail basistekst</div>
-      <p class="sub" style="margin-bottom:10px">De tekst waarmee de Reminder-mail (Indeling > Acties) standaard opent. De lijst met aangemelde spelers wordt hier altijd automatisch onder geplakt — die hoeft u hier niet op te nemen. Gebruik <code>[DATUM]</code> en <code>[AANTAL]</code> op de plek waar de speelavond-datum resp. het aantal aanmeldingen moet komen te staan; die worden bij het opstellen van elke mail automatisch ingevuld. Leeg laten = terug naar de standaardtekst.</p>
+      <p class="sub" style="margin-bottom:10px">Tekst waarmee de Reminder-mail (Indeling > Acties) standaard opent. De lijst met aangemelde spelers wordt er automatisch onder geplakt — die hoeft u hier niet op te nemen. Gebruik <code>[DATUM]</code> en <code>[AANTAL]</code> op de plek waar de speelavond-datum resp. het aantal aanmeldingen moet komen te staan; die worden bij het opstellen van elke mail automatisch ingevuld.</p>
       <textarea id="admin-reminder-tekst" rows="8" style="width:100%;resize:vertical;font-family:inherit;font-size:15px;color:var(--text);border:1px solid var(--border-strong);border-radius:var(--radius);padding:10px 12px;margin-bottom:10px">${reminderTekst}</textarea>
       <button class="btn btn-primary" onclick="opslaanReminderMailTekst()">Opslaan</button>
       <p id="reminder-tekst-error" class="error-msg hidden"></p>
@@ -7954,10 +7947,9 @@ async function opslaanAfzendEmail(){
   toast('E-mailadres opgeslagen');
 }
 
-// Deel 157, Kay's verzoek: basistekst van de Reminder-mail opslaan. Een leeg
-// veld wordt bewust als null opgeslagen (niet als lege string) zodat
-// reminderMailBasisTekst() daarna weer netjes terugvalt op
-// STANDAARD_REMINDER_MAIL_TEKST in plaats van een mail met een lege tekst.
+// Deel 157/158, Kay's verzoek: basistekst van de Reminder-mail opslaan,
+// letterlijk zoals ingevuld -- ook als dat leeg is ("leeg is leeg", geen
+// terugval naar een standaardtekst).
 async function opslaanReminderMailTekst(){
   const veld = document.getElementById('admin-reminder-tekst');
   const waarde = veld.value.trim();
@@ -7971,7 +7963,6 @@ async function opslaanReminderMailTekst(){
     return;
   }
   instellingen.reminder_mail_tekst = waarde || null;
-  if(!waarde) veld.value = STANDAARD_REMINDER_MAIL_TEKST;
   toast('Reminder-mail tekst opgeslagen');
 }
 
