@@ -682,7 +682,7 @@
       </p>
     </div>
 
-    <p style="font-size:11px;color:var(--text-muted);text-align:center;margin-top:24px;line-height:1.6">&copy; 2026 VanDeLinde Consulting BV<br>v3.8.1</p>
+    <p style="font-size:11px;color:var(--text-muted);text-align:center;margin-top:24px;line-height:1.6">&copy; 2026 VanDeLinde Consulting BV<br>v3.9.0</p>
   </div>
 </div>
 
@@ -5997,52 +5997,98 @@ function isIosBeginschermApp(){
   return window.navigator.standalone === true;
 }
 
-// Wijkuit voor isIosBeginschermApp hierboven: print via een gloednieuw,
-// heel gewoon browsertabblad i.p.v. het huidige tabblad/de standalone-schil
-// zelf -- dát is precies waar iOS' print-probleem niet optreedt. Zelfde
-// kneep als bij de mailto-links (deel 155/156): een echte <a>-klik (hier
-// synthetisch, maar synchroon binnen de klik-handler van de Afdrukken-knop,
-// dus met behoud van de "echte klik"-context) i.p.v. een losse
-// window.open()-aanroep, om geen pop-upblokkering te riskeren. Het nieuwe
-// tabblad krijgt de inhoud via een blob-URL (geen aparte pagina/route nodig
-// in deze eenbestands-app) en printt zichzelf zodra het geladen is; na het
-// sluiten van het printvenster sluit dat tabblad ook vanzelf weer, zodat
-// Horeca/Balie gewoon in de beginscherm-app terechtblijft. Kon niet op een
-// echt iPhone/iPad getest worden -- gebaseerd op het bekende, gedocumenteerde
-// probleem en een gangbare, goed ondersteunde omzeiling daarvan.
-function printHtmlViaNieuweTab(innerHtml, paginaCss){
-  // Deel 160, Kay's screenshot: Safari toonde in het nieuwe tabblad de
-  // melding "De webpagina is niet helemaal geladen. Wil je doorgaan met
-  // afdrukken?" -- het nieuwe tabblad werkte dus echt (inhoud klopte), maar
-  // window.print() werd kennelijk net te vroeg aangeroepen (synchroon tijdens
-  // het afhandelen van het eigen load-event van dát tabblad), waardoor Safari
-  // het document nog niet als "klaar" beschouwde. Zelfde soort "print van
-  // net geladen/ingevoegde content"-timing-probleem als deel 81 destijds bij
-  // de Horecalijst zelf (daar opgelost met twee geneste
-  // requestAnimationFrame's) -- hier losgelaten na het load-event, met een
-  // korte, bewuste vertraging zodat Safari de pagina ook écht als voltooid
-  // laden heeft gemarkeerd vóórdat er geprint wordt. Niet op een echt toestel
-  // te verifiëren vanaf hier, dus graag opnieuw testen.
-  const htmlDoc = `<!doctype html>
-<html><head><meta charset="utf-8"><title>Afdrukken</title>
-<style>${paginaCss}</style>
-</head><body>${innerHtml}
-<script>
-  window.addEventListener('load', function(){ setTimeout(function(){ window.print(); }, 300); });
-  window.onafterprint = function(){ window.close(); };
-<\/script>
-</body></html>`;
-  const blobUrl = URL.createObjectURL(new Blob([htmlDoc], { type: 'text/html' }));
-  const a = document.createElement('a');
-  a.href = blobUrl;
-  a.target = '_blank';
-  a.rel = 'noopener';
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-  // Pas na een ruime vertraging opruimen -- het nieuwe tabblad moet de
-  // blob-URL eerst nog kunnen laden.
-  setTimeout(() => URL.revokeObjectURL(blobUrl), 30000);
+// Deel 161, Kay's screenshots: het nieuwe-tabblad-met-window.print()-spoor
+// hierboven (deel 159/160) bleek toch niet bruikbaar. Eerst een "pagina niet
+// geladen"-waarschuwing (deel 160), en na het verhelpen daarvan bleek "Druk
+// af" domweg te ontbreken in het deelvenster dat window.print() op iOS
+// opent -- ook niet onder "Toon meer". Dat is geen toeval: een blob:-URL
+// (de inhoud van zo'n nieuw tabblad) wordt door iOS kennelijk niet als een
+// "printbare" pagina herkend, dus biedt het systeem de Druk af-actie er niet
+// eens voor aan -- los van het feit dat window.print() op iOS sowieso al
+// broos is (werkt alleen als het synchroon binnen de klik zelf wordt
+// aangeroepen, geen enkele await/setTimeout ertussen, precies waar de
+// vorige poging juist wél een vertraging voor nodig had).
+//
+// Nieuwe aanpak, zonder nieuw tabblad en zonder window.print(): dezelfde
+// inhoud als een echt PDF-bestand (met jsPDF, dezelfde bibliotheek die
+// Indeling afdrukken hieronder al jarenlang betrouwbaar gebruikt) en dat
+// bestand meegeven aan navigator.share() -- de iOS Web Share API, die wél in
+// beginscherm-modus werkt én een PDF-bestand (in tegenstelling tot een
+// blob:-tabblad) gewoon als "printbaar" herkent, dus "Druk af" hoort hier
+// wél tussen de deelopties te staan. navigator.share moet net als
+// window.print() synchroon binnen de klik zelf aangeroepen worden (geen
+// await ervoor) -- dit hele pad is daarom, net als de PDF-opbouw zelf,
+// bewust volledig synchroon. Geen Web Share-ondersteuning (canShare
+// ontbreekt of zegt nee), of het delen zelf mislukt -> het PDF-bestand wordt
+// dan gewoon gedownload (doc.save), zoals Indeling afdrukken al doet -- de
+// gebruiker kan het dan zelf openen en van daaruit alsnog afdrukken/delen.
+// Kon niet op een echt iPhone/iPad getest worden.
+function deelOfDownloadPdf(doc, bestandsnaam){
+  let file;
+  try{
+    file = new File([doc.output('blob')], bestandsnaam, { type: 'application/pdf' });
+  } catch(err){
+    doc.save(bestandsnaam);
+    return;
+  }
+  if(navigator.canShare && navigator.canShare({ files: [file] })){
+    navigator.share({ files: [file], title: bestandsnaam }).catch(err=>{
+      if(err && err.name === 'AbortError') return; // gebruiker heeft het deelvenster zelf geannuleerd
+      toast('Delen is mislukt -- het bestand wordt nu gedownload.');
+      doc.save(bestandsnaam);
+    });
+    return;
+  }
+  doc.save(bestandsnaam);
+}
+
+// PDF-versie van de Horecalijst (zelfde inhoud/volgorde als de schermweergave
+// hierboven), gebruikt door drukHorecaLijstAf hieronder op een iOS-toestel
+// in beginscherm-modus -- zie deelOfDownloadPdf hierboven voor waarom.
+function bouwHorecaLijstPdf(avond, eters, tellingen, nietBridge){
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+  const datumLabel = fmtDatumVol(avond.datum);
+  doc.setProperties({ title: `Horecalijst ${datumLabel}` });
+
+  const marge = 18, pageW = 210, pageH = 297;
+  let y = marge;
+
+  doc.setFont('helvetica', 'bold'); doc.setFontSize(16); doc.setTextColor(17,17,17);
+  doc.text('Goyer Bridge — Horecalijst', marge, y); y += 7;
+
+  doc.setFont('helvetica', 'normal'); doc.setFontSize(11);
+  doc.text(datumLabel, marge, y); y += 5;
+
+  doc.setFontSize(9); doc.setTextColor(90);
+  const omschrLines = doc.splitTextToSize(avondEventOmschrijvingTekst(avond) || '—', pageW - marge*2);
+  doc.text(omschrLines, marge, y); y += omschrLines.length * 4 + 5;
+  doc.setTextColor(17,17,17);
+
+  doc.setFont('helvetica', 'bold'); doc.setFontSize(10);
+  doc.text(`Aantal Horeca: ${tellingen.horeca}   Aantal Bridge: ${tellingen.aanmeldingen}   Aantal tafels: ${tellingen.tafels}`, marge, y);
+  y += 9;
+
+  const nieuwePaginaAlsNodig = () => { if(y > pageH - marge){ doc.addPage(); y = marge; } };
+  const schrijfRegel = (tekst) => { nieuwePaginaAlsNodig(); doc.text(tekst, marge, y); y += 6; };
+
+  const toonSchifting = !!(nietBridge && nietBridge.length);
+
+  doc.setFontSize(10);
+  if(toonSchifting){ doc.setFont('helvetica', 'bold'); schrijfRegel('Bridge'); doc.setFont('helvetica', 'normal'); }
+  if(eters.length){
+    eters.forEach((l,i)=> schrijfRegel(`${i+1}. ${l.voornaam} ${l.achternaam}${l.gasten ? ' +'+l.gasten : ''}${l.vegetarisch ? ' (Vegetarisch)' : ''}${l.opmerkingen ? ' ('+l.opmerkingen+')' : ''}`));
+  } else {
+    doc.setTextColor(130); schrijfRegel('Geen aanmeldingen voor horeca'); doc.setTextColor(17,17,17);
+  }
+
+  if(toonSchifting){
+    y += 4;
+    doc.setFont('helvetica', 'bold'); schrijfRegel('Niet-Bridge'); doc.setFont('helvetica', 'normal');
+    nietBridge.forEach((p,i)=> schrijfRegel(`${i+1}. ${p.naam}${p.gasten ? ' +'+p.gasten : ''}${p.opmerkingen ? ' ('+p.opmerkingen+')' : ''}`));
+  }
+
+  return doc;
 }
 
 function drukHorecaLijstAf(){
@@ -6087,13 +6133,13 @@ function drukHorecaLijstAf(){
         </div>` : ''}
     </div>`;
 
-  // Deel 159: op een iOS-toestel dat als beginscherm-app draait werkt
-  // window.print() niet (zie isIosBeginschermApp hierboven) -- dan printen
-  // via een nieuw, gewoon browsertabblad i.p.v. het bestaande
-  // #horeca-print-area-blok. Op desktop (en elders) blijft de al werkende
-  // aanpak hieronder ongewijzigd.
+  // Deel 159/161: op een iOS-toestel dat als beginscherm-app draait werkt
+  // window.print() niet (zie isIosBeginschermApp hierboven) -- dan een PDF
+  // opbouwen en delen/downloaden (zie deelOfDownloadPdf) i.p.v. het
+  // bestaande #horeca-print-area-blok. Op desktop (en elders) blijft de al
+  // werkende aanpak hieronder ongewijzigd.
   if(isIosBeginschermApp()){
-    printHtmlViaNieuweTab(lijstHtml, '@page{ size:A4; margin:18mm }');
+    deelOfDownloadPdf(bouwHorecaLijstPdf(avond, eters, tellingen, nietBridge), `Horecalijst ${fmtDatumVol(avond.datum)}.pdf`);
     return;
   }
 
@@ -9841,9 +9887,9 @@ function drukKoffertjeLijstAf(){
       ${tabelHtml(uitgeleend, 'opgehaald_op', 'Opgehaald op', 'Teruggebracht')}
     </div>`;
 
-  // Deel 159, zelfde reden/aanpak als bij drukHorecaLijstAf hierboven.
+  // Deel 159/161, zelfde reden/aanpak als bij drukHorecaLijstAf hierboven.
   if(isIosBeginschermApp()){
-    printHtmlViaNieuweTab(lijstHtml, '@page{ size:A4; margin:18mm }');
+    deelOfDownloadPdf(bouwKoffertjesLijstPdf(wachtend, uitgeleend, naamVoorRij), `Koffertjeslijst ${fmtDatumVol(new Date())}.pdf`);
     return;
   }
 
@@ -9851,6 +9897,65 @@ function drukKoffertjeLijstAf(){
 
   zetPrintPaginaStijl('@page{ size:A4; margin:18mm }');
   window.print();
+}
+
+// PDF-versie van de Koffertjeslijst (zelfde inhoud/volgorde als de
+// schermweergave hierboven), gebruikt door drukKoffertjeLijstAf op een
+// iOS-toestel in beginscherm-modus -- zie deelOfDownloadPdf (bij
+// drukHorecaLijstAf) voor waarom.
+function bouwKoffertjesLijstPdf(wachtend, uitgeleend, naamVoorRij){
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+  const datumLabel = fmtDatumVol(new Date());
+  doc.setProperties({ title: `Koffertjeslijst ${datumLabel}` });
+
+  const marge = 18, pageW = 210, pageH = 297;
+  let y = marge;
+
+  doc.setFont('helvetica', 'bold'); doc.setFontSize(16); doc.setTextColor(17,17,17);
+  doc.text('Goyer Bridge — Koffertjeslijst', marge, y); y += 7;
+  doc.setFont('helvetica', 'normal'); doc.setFontSize(11);
+  doc.text(datumLabel, marge, y); y += 9;
+
+  const kolX = { nr: marge, naam: marge+12, tijd: marge+95, vink: marge+140 };
+  const nieuwePaginaAlsNodig = () => { if(y > pageH - marge){ doc.addPage(); y = marge; } };
+
+  const tekenTabel = (titel, lijst, tijdVeld, tijdLabel, vinkjeLabel) => {
+    nieuwePaginaAlsNodig();
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(12);
+    doc.text(`${titel} (${lijst.length})`, marge, y); y += 6;
+
+    doc.setFontSize(9);
+    doc.text('Nr.', kolX.nr, y);
+    doc.text('Naam', kolX.naam, y);
+    doc.text(tijdLabel, kolX.tijd, y);
+    doc.text(vinkjeLabel, kolX.vink, y);
+    doc.setDrawColor(17,17,17); doc.setLineWidth(0.3);
+    doc.line(marge, y+1.5, pageW-marge, y+1.5);
+    y += 6;
+
+    doc.setFont('helvetica', 'normal');
+    if(!lijst.length){
+      doc.setTextColor(130);
+      doc.text('Geen', marge, y); y += 6;
+      doc.setTextColor(17,17,17);
+    } else {
+      lijst.forEach(r => {
+        nieuwePaginaAlsNodig();
+        doc.text(String(r.koffertje_nummer), kolX.nr, y);
+        doc.text(naamVoorRij(r), kolX.naam, y);
+        doc.text(fmtDatumTijd(r[tijdVeld]), kolX.tijd, y);
+        doc.rect(kolX.vink, y-3, 3.5, 3.5);
+        y += 6;
+      });
+    }
+    y += 6;
+  };
+
+  tekenTabel('Koffertjes die vandaag worden opgehaald', wachtend, 'besteld_op', 'Besteld op', 'Opgehaald');
+  tekenTabel('Koffertjes die zijn uitgeleend', uitgeleend, 'opgehaald_op', 'Opgehaald op', 'Teruggebracht');
+
+  return doc;
 }
 
 function startBaliePolling(){
