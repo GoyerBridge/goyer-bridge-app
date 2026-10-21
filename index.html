@@ -682,7 +682,7 @@
       </p>
     </div>
 
-    <p style="font-size:11px;color:var(--text-muted);text-align:center;margin-top:24px;line-height:1.6">&copy; 2026 VanDeLinde Consulting BV<br>v3.7.1</p>
+    <p style="font-size:11px;color:var(--text-muted);text-align:center;margin-top:24px;line-height:1.6">&copy; 2026 VanDeLinde Consulting BV<br>v3.8.0</p>
   </div>
 </div>
 
@@ -5981,6 +5981,58 @@ function zetPrintPaginaStijl(css){
   stijl.textContent = css;
 }
 
+// Deel 159, Kay's melding "In Horeca inlog werkt de print button niet":
+// geen bug in de Horeca-login zelf (zelfde knop/functie als Balie > Horeca,
+// en Kay bevestigde dat het op datzelfde toestel óók bij Balie niet werkte),
+// maar een al jarenlang bekend iOS Safari-probleem: op een toestel dat als
+// app aan het beginscherm is toegevoegd ("standalone"-modus) doet
+// window.print() het niet (bevestigd: na het weer verwijderen van die
+// snelkoppeling, gewone Safari-tab, werkte de printknop gewoon). navigator.
+// standalone is een iOS/iPadOS-only eigenschap (undefined op desktop en
+// Android) -- dus deze functie is bewust zo gericht mogelijk: alleen exact
+// die situatie wijkt af van de bestaande, al werkende aanpak (het
+// onzichtbare #horeca-print-area/#koffertje-print-area-blok verderop), die
+// voor desktop (en de rest) ongewijzigd blijft.
+function isIosBeginschermApp(){
+  return window.navigator.standalone === true;
+}
+
+// Wijkuit voor isIosBeginschermApp hierboven: print via een gloednieuw,
+// heel gewoon browsertabblad i.p.v. het huidige tabblad/de standalone-schil
+// zelf -- dát is precies waar iOS' print-probleem niet optreedt. Zelfde
+// kneep als bij de mailto-links (deel 155/156): een echte <a>-klik (hier
+// synthetisch, maar synchroon binnen de klik-handler van de Afdrukken-knop,
+// dus met behoud van de "echte klik"-context) i.p.v. een losse
+// window.open()-aanroep, om geen pop-upblokkering te riskeren. Het nieuwe
+// tabblad krijgt de inhoud via een blob-URL (geen aparte pagina/route nodig
+// in deze eenbestands-app) en printt zichzelf zodra het geladen is; na het
+// sluiten van het printvenster sluit dat tabblad ook vanzelf weer, zodat
+// Horeca/Balie gewoon in de beginscherm-app terechtblijft. Kon niet op een
+// echt iPhone/iPad getest worden -- gebaseerd op het bekende, gedocumenteerde
+// probleem en een gangbare, goed ondersteunde omzeiling daarvan.
+function printHtmlViaNieuweTab(innerHtml, paginaCss){
+  const htmlDoc = `<!doctype html>
+<html><head><meta charset="utf-8"><title>Afdrukken</title>
+<style>${paginaCss}</style>
+</head><body>${innerHtml}
+<script>
+  window.onload = function(){ window.print(); };
+  window.onafterprint = function(){ window.close(); };
+<\/script>
+</body></html>`;
+  const blobUrl = URL.createObjectURL(new Blob([htmlDoc], { type: 'text/html' }));
+  const a = document.createElement('a');
+  a.href = blobUrl;
+  a.target = '_blank';
+  a.rel = 'noopener';
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  // Pas na een ruime vertraging opruimen -- het nieuwe tabblad moet de
+  // blob-URL eerst nog kunnen laden.
+  setTimeout(() => URL.revokeObjectURL(blobUrl), 30000);
+}
+
 function drukHorecaLijstAf(){
   if(!horecaModalData) return;
   const { avond, eters, tellingen, nietBridge } = horecaModalData;
@@ -5999,7 +6051,7 @@ function drukHorecaLijstAf(){
         <span>${l.voornaam} ${l.achternaam}${l.gasten ? ' +'+l.gasten : ''}${l.vegetarisch ? ' (Vegetarisch)' : ''}${l.opmerkingen ? ' ('+l.opmerkingen+')' : ''}</span>
       </div>`;
 
-  document.getElementById('horeca-print-area').innerHTML = `
+  const lijstHtml = `
     <div style="font-family:Arial,Helvetica,sans-serif;color:#111">
       <div style="font-size:20px;font-weight:800;margin-bottom:10px;color:#111">Goyer Bridge — Horecalijst</div>
       <div style="font-size:14px;margin-bottom:2px">${fmtDatumVol(avond.datum)}</div>
@@ -6022,6 +6074,18 @@ function drukHorecaLijstAf(){
               </div>`).join('')}</div>
         </div>` : ''}
     </div>`;
+
+  // Deel 159: op een iOS-toestel dat als beginscherm-app draait werkt
+  // window.print() niet (zie isIosBeginschermApp hierboven) -- dan printen
+  // via een nieuw, gewoon browsertabblad i.p.v. het bestaande
+  // #horeca-print-area-blok. Op desktop (en elders) blijft de al werkende
+  // aanpak hieronder ongewijzigd.
+  if(isIosBeginschermApp()){
+    printHtmlViaNieuweTab(lijstHtml, '@page{ size:A4; margin:18mm }');
+    return;
+  }
+
+  document.getElementById('horeca-print-area').innerHTML = lijstHtml;
 
   zetPrintPaginaStijl('@page{ size:A4; margin:18mm }');
   // Deel 81, Kay's melding "print knop doet niets meer": window.print() werd
@@ -9755,7 +9819,7 @@ function drukKoffertjeLijstAf(){
       </tr>`).join('') : `<tr><td colspan="4" style="padding:10px 8px;color:#888;text-align:center">Geen</td></tr>`}</tbody>
     </table>`;
 
-  document.getElementById('koffertje-print-area').innerHTML = `
+  const lijstHtml = `
     <div style="font-family:Arial,Helvetica,sans-serif;color:#111">
       <div style="font-size:20px;font-weight:800;margin-bottom:4px;color:#111">Goyer Bridge — Koffertjeslijst</div>
       <div style="font-size:14px;margin-bottom:12px">${fmtDatumVol(new Date())}</div>
@@ -9764,6 +9828,14 @@ function drukKoffertjeLijstAf(){
       <div style="font-size:14px;font-weight:700;margin-bottom:4px">Koffertjes die zijn uitgeleend (${uitgeleend.length})</div>
       ${tabelHtml(uitgeleend, 'opgehaald_op', 'Opgehaald op', 'Teruggebracht')}
     </div>`;
+
+  // Deel 159, zelfde reden/aanpak als bij drukHorecaLijstAf hierboven.
+  if(isIosBeginschermApp()){
+    printHtmlViaNieuweTab(lijstHtml, '@page{ size:A4; margin:18mm }');
+    return;
+  }
+
+  document.getElementById('koffertje-print-area').innerHTML = lijstHtml;
 
   zetPrintPaginaStijl('@page{ size:A4; margin:18mm }');
   window.print();
