@@ -682,7 +682,7 @@
       </p>
     </div>
 
-    <p style="font-size:11px;color:var(--text-muted);text-align:center;margin-top:24px;line-height:1.6">&copy; 2026 VanDeLinde Consulting BV<br>v3.9.0</p>
+    <p style="font-size:11px;color:var(--text-muted);text-align:center;margin-top:24px;line-height:1.6">&copy; 2026 VanDeLinde Consulting BV<br>v3.11.0</p>
   </div>
 </div>
 
@@ -1176,6 +1176,12 @@ const KOFFERTJE_GROEPEN = [
 // zo hoeft een volgende aanpassing van de grenzen niet ook nog op een
 // tweede plek (de "Beschikbaar: X/45"-teller) doorgevoerd te worden.
 const AANTAL_KOFFERTJES = Math.max(...KOFFERTJE_GROEPEN.map(g => g.tot));
+// Deel 163, Kay's verzoek: de limiet van "max 1 koffertje tegelijk per lid"
+// (deel 37) gaat naar 2 -- het komt voor dat een lid met een koffertje al
+// vast het volgende wil bestellen. Eén centrale constante i.p.v. een losse
+// aanwezig/niet-aanwezig-check (zie bestelKoffertje), zodat een eventuele
+// latere aanpassing van dit getal maar op één plek hoeft.
+const KOFFERTJE_MAX_PER_LID = 2;
 
 // Deel 66/67: JS-workaround "forceerIOSLayoutHertekening()" (een reflow
 // forceren door <body> kort display:none te zetten) is in deel 71
@@ -4408,6 +4414,20 @@ function bepaalEerstvolgendeSpeelavond(){
     .sort((a,b)=>new Date(a.datum)-new Date(b.datum))[0] || null;
 }
 
+// Deel 162, Kay's verzoek: het spiegelbeeld van bepaalEerstvolgendeSpeelavond
+// hierboven -- de laatst AFGELOPEN speelavond (datum < vandaag), gebruikt om
+// te bepalen of "middernacht van de vorige speelavond" al gepasseerd is (zie
+// renderIndelingContent). Omdat elke speelavond met een datum vóór vandaag
+// per definitie al zijn eigen middernacht achter de rug heeft, is "bestaat
+// er een vorige speelavond" hier gelijk aan "is middernacht van de vorige
+// speelavond al geweest" -- geen aparte tijdstip-berekening nodig.
+function bepaalVorigeSpeelavond(){
+  const vandaag = vandaagISO();
+  return speelavonden
+    .filter(a=>a.datum < vandaag)
+    .sort((a,b)=>new Date(b.datum)-new Date(a.datum))[0] || null;
+}
+
 // "Event - Omschrijving" (DB-kolomnamen omschrijving/bijzonderheden). Sinds
 // deel 46 ook rechtstreeks hergebruikt in de Admin > Indeling-kop (zie
 // renderAanwezigContent) — de losse renderAvondOmschrijving-functie/element
@@ -4672,16 +4692,30 @@ async function renderIndelingContent(){
       <div style="margin-top:10px">Je bent <b>${isAangemeld ? 'wel' : 'niet'}</b> aangemeld voor dit event en je blijft <b>${isDiner ? 'wel' : 'niet'}</b> eten.</div>
     </div>`;
 
-  // Gefaseerde weergave (deel 56, Kay's verzoek): meer dan 6 dagen (6x24 uur)
-  // van tevoren gedraagt deze pagina zich zoals voorheen (nog niets, of zodra
-  // gepubliceerd meteen de volledige indeling). Vanaf 6 dagen tot 1 dag (24
-  // uur) van tevoren toont de pagina altijd een alfabetische "Voorlopige
-  // aanmeldingen"-lijst, ongeacht publicatiestatus. In het laatste etmaal
-  // toont de pagina de volledige indeling (inclusief wedstrijdleiders) zodra
-  // gepubliceerd, en blijft anders bij dezelfde "Voorlopige aanmeldingen"-
-  // lijst — en wisselt daar live tussen (via de bestaande 30s-polling,
-  // pollIndeling) zodra de beheerder alsnog publiceert/depubliceert binnen
-  // dat etmaal.
+  // Gefaseerde weergave (deel 56, Kay's verzoek, aangepast in deel 162).
+  // In het laatste etmaal (24 uur) vóór een speelavond toont de pagina de
+  // volledige indeling (inclusief wedstrijdleiders) zodra gepubliceerd, en
+  // blijft anders bij de "Voorlopige aanmeldingen"-lijst — en wisselt daar
+  // live tussen (via de bestaande 30s-polling, pollIndeling) zodra de
+  // beheerder alsnog publiceert/depubliceert binnen dat etmaal.
+  //
+  // Daarbuiten (meer dan 24 uur van tevoren): is de indeling al gepubliceerd
+  // (bv. ruim vooraf), dan verschijnt die meteen, zoals voorheen. Zo niet,
+  // dan is het de vraag of de "Voorlopige aanmeldingen"-lijst al getoond
+  // wordt. Deel 56 gebruikte hiervoor een vaste grens van 6 dagen (144 uur)
+  // vóór de speelavond. Deel 162, Kay's verzoek: die vaste grens is vervangen
+  // door "staat er al een afgelopen speelavond op de kalender" (zie
+  // bepaalVorigeSpeelavond hierboven) -- zodra de vorige speelavond voorbij
+  // is (middernacht van die datum is per definitie al gepasseerd), verschijnt
+  // de voorlopige lijst voor de eerstvolgende, ongeacht hoeveel dagen dat nog
+  // weg is. Dat voorkomt een "dode periode" vlak na een speelavond wanneer de
+  // volgende door een onregelmatig schema (bv. een vakantieweek) verder dan 6
+  // dagen weg ligt -- in de gebruikelijke wekelijkse situatie verschuift het
+  // omslagpunt hierdoor ook iets naar voren (vanaf de kalenderdag ná de
+  // vorige speelavond, in plaats van pas 6x24 uur vóór de volgende). Alleen
+  // wanneer er nog helemaal geen eerdere speelavond bekend is (bv. de allereerste
+  // keer dat de club deze app gebruikt) valt de pagina terug op de oude
+  // "nog geen indeling bekend"-melding.
   //
   // Deel 139, Kay's verzoek: leden zien hier voortaan de VOLLEDIGE indeling
   // (alle lijnen), niet meer alleen hun eigen lijn. Hernoemd van
@@ -4736,12 +4770,12 @@ async function renderIndelingContent(){
     const uren = urenTotAvondStart(avond);
     if(uren <= 24){
       html += avond.gepubliceerd ? await volledigeIndelingHtml() : voorlopigeAanmeldingenHtml(records);
-    } else if(uren <= 144){
-      html += voorlopigeAanmeldingenHtml(records);
-    } else if(!avond.gepubliceerd){
-      html += '<div class="empty">Nog geen indeling bekend. Zodra de beheerder een speelavond heeft ingedeeld en gepubliceerd, verschijnt deze hier.</div>';
-    } else {
+    } else if(avond.gepubliceerd){
       html += await volledigeIndelingHtml();
+    } else if(bepaalVorigeSpeelavond()){
+      html += voorlopigeAanmeldingenHtml(records);
+    } else {
+      html += '<div class="empty">Nog geen indeling bekend. Zodra de beheerder een speelavond heeft ingedeeld en gepubliceerd, verschijnt deze hier.</div>';
     }
   } else {
     // Deel 123, n.a.v. Kay's screenshot (geïnstalleerde app toonde een groot
@@ -9054,10 +9088,15 @@ async function bestelKoffertje(nummer, lidIdOverride, directUitgeven, gewensteDa
     sluitKoffertjeModal();
     return herlaadKoffertjesHuidigeScherm();
   }
-  const eigen = open.find(r=>r.lid_id===lidId);
-  if(eigen){
+  // Deel 163: "al een koffertje in bezit" is vervangen door een telling tegen
+  // KOFFERTJE_MAX_PER_LID (was impliciet 1, nu 2) -- zodat een lid dat al een
+  // koffertje heeft, vast het volgende kan bestellen, maar niet onbeperkt.
+  const eigenRijen = open.filter(r=>r.lid_id===lidId);
+  if(eigenRijen.length >= KOFFERTJE_MAX_PER_LID){
     const lid = leden.find(l=>l.id===lidId);
-    toast(`${lidIdOverride ? (lid ? lid.voornaam : 'Dit lid') : 'Je'} heeft al koffertje ${eigen.koffertje_nummer} in bezit. Eerst terugbrengen voordat er een nieuwe besteld wordt.`);
+    const nummers = eigenRijen.map(r=>r.koffertje_nummer).sort((a,b)=>a-b).join(' en ');
+    const wie = lidIdOverride ? (lid ? lid.voornaam : 'Dit lid') : 'Je';
+    toast(`${wie} heeft al ${eigenRijen.length > 1 ? `koffertjes ${nummers}` : `koffertje ${nummers}`} in bezit (max ${KOFFERTJE_MAX_PER_LID} tegelijk). Eerst terugbrengen voordat er een nieuwe besteld wordt.`);
     sluitKoffertjeModal();
     return;
   }
@@ -9392,20 +9431,24 @@ async function renderKoffertjeTab(){
   const historieMap = {};
   historie.forEach(h=>{ if(historieMap[h.koffertje_nummer]===undefined) historieMap[h.koffertje_nummer] = h.besteld_op; });
 
-  const eigenRow = open.find(r=>r.lid_id===currentUser.id);
-  let topHtml = '';
-  if(eigenRow){
+  // Deel 163: sinds de limiet van 1 naar KOFFERTJE_MAX_PER_LID (2) is
+  // gegaan, kan een lid meer dan één actieve rij tegelijk hebben -- deze
+  // kaart was gebouwd rond precies één eigenRow (open.find, dus altijd maar
+  // één kaartje, ook al had iemand toen al nooit meer dan 1 kunnen hebben).
+  // Nu een kaartje per eigen open rij, elk met zijn eigen annuleerknop.
+  const eigenRijenTab = open.filter(r=>r.lid_id===currentUser.id);
+  let topHtml = eigenRijenTab.map(eigenRow=>{
     const eigenVerlopen = eigenRow.opgehaald_op && koffertjeIsVerlopen(eigenRow);
     const eigenTeLaat = !eigenRow.opgehaald_op && koffertjeIsTeLaatOpgehaald(eigenRow);
     const statusTekst = eigenRow.opgehaald_op
       ? `In je bezit sinds ${fmtDatumKort(eigenRow.opgehaald_op)}. Breng 'm terug bij de balie zodra je klaar bent.${eigenVerlopen ? ' Dit koffertje staat al langer dan tien dagen uit — lever \'m zo snel mogelijk in.' : ''}`
       : `Besteld — ophalen op ${koffertjeOphaalTekstVoorRij(eigenRow)} bij de receptie van de Goyer.${eigenTeLaat ? ' Je hebt \'m nog niet opgehaald — heb je \'m niet meer nodig, annuleer de bestelling dan zodat een ander lid het kan gebruiken.' : ''}`;
-    topHtml = `<div class="card" style="margin-bottom:1.25rem">
+    return `<div class="card" style="margin-bottom:1.25rem">
       <div style="font-weight:600;margin-bottom:6px">Jouw koffertje: nummer ${eigenRow.koffertje_nummer}</div>
       <div class="sub" ${!eigenRow.opgehaald_op ? 'style="margin-bottom:12px"' : ''}>${statusTekst}</div>
       ${!eigenRow.opgehaald_op ? `<button class="btn btn-danger" onclick="annuleerKoffertjeBestelling('${eigenRow.id}')">Bestelling annuleren</button>` : ''}
     </div>`;
-  }
+  }).join('');
 
   const kolommenHtml = KOFFERTJE_GROEPEN.map(g=>{
     const tegels = [];
