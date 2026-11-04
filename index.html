@@ -682,7 +682,7 @@
       </p>
     </div>
 
-    <p style="font-size:11px;color:var(--text-muted);text-align:center;margin-top:24px;line-height:1.6">&copy; 2026 VanDeLinde Consulting BV<br>v3.12.1</p>
+    <p style="font-size:11px;color:var(--text-muted);text-align:center;margin-top:24px;line-height:1.6">&copy; 2026 VanDeLinde Consulting BV<br>v3.13.0</p>
   </div>
 </div>
 
@@ -972,6 +972,17 @@
 <div id="horecaKeuzeModal" class="modal-overlay hidden" onclick="if(event.target===this) sluitHorecaKeuzeModal()">
   <div class="modal-box" style="max-width:340px">
     <div id="horecaKeuzeModal-inhoud"></div>
+  </div>
+</div>
+
+<!-- Deel 165, Kay's screenshot/verzoek: het Opmerkingen-veld bij Individuele
+     > Aanmelden (zelf aanmelden) past hierin i.p.v. inline naast het
+     Bridge-blokje -- zie openHorecaOpmerkingModal/sluitHorecaOpmerkingModal
+     hieronder. Zelfde .modal-overlay/.modal-box-patroon als de andere
+     modals, dus altijd binnen het scherm. -->
+<div id="horecaOpmerkingModal" class="modal-overlay hidden" onclick="if(event.target===this) sluitHorecaOpmerkingModal()">
+  <div class="modal-box" style="max-width:340px">
+    <div id="horecaOpmerkingModal-inhoud"></div>
   </div>
 </div>
 
@@ -4869,11 +4880,11 @@ async function renderAanwezigContent(){
       // omhullende div (niet alleen het label) zodat ook een klik op het
       // tijd-tekstje eronder de tekst toont.
       // Deel 86, Kay's verzoek: bij Lunch/Diner opent een klik op het
-      // horeca-blokje voortaan een keuze-blokje i.p.v. de checkbox meteen om
-      // te zetten -- de keuze schrijft pas bij het klikken op Opslaan weg
-      // (zie kiesHorecaOpmerking). Een nieuwe klik terwijl al aangemeld is
-      // opent dezelfde keuze weer, zodat hij te controleren/aan te passen is
-      // (met een uitschrijf-optie erbij). Bij Borrel/"Anders" (geen
+      // horeca-blokje voortaan een keuze i.p.v. de checkbox meteen om te
+      // zetten -- de keuze schrijft pas bij het klikken op Opslaan weg (zie
+      // kiesHorecaOpmerking). Een nieuwe klik terwijl al aangemeld is opent
+      // dezelfde keuze weer, zodat hij te controleren/aan te passen is (met
+      // een uitschrijf-optie erbij). Bij Borrel/"Anders" (geen
       // keuze-ondersteuning) blijft de simpele checkbox-toggle van hiervoor
       // gewoon bestaan.
       // Deel 88, Kay's verzoek: geen apart "Annuleren" meer naast "Ik eet
@@ -4887,18 +4898,18 @@ async function renderAanwezigContent(){
       // twee vaste opties te kiezen. Opgeslagen in aanwezigheid.diner_opmerking
       // (zie setDinerKeuze/kiesHorecaOpmerking hieronder) i.p.v. het oude
       // vegetarisch-vlag, dat voortaan niet meer beschreven wordt.
+      // Deel 165, Kay's screenshot: het opmerkingenveld stond eerst inline
+      // naast het Bridge-blokje (zelfde plek als de oude Klassiek/
+      // Vegetarisch-knoppen) -- met een vaste min-width paste dat niet meer
+      // op een iPhone-scherm (liep af buiten het kaartje). Nu een echte
+      // pop-up (horecaOpmerkingModal, zie openHorecaOpmerkingModal
+      // hieronder) met een X-sluitknop, net als de andere modals in de app
+      // -- die past altijd binnen het scherm.
       let horecaBlokHtml = '';
-      if(horeca && horecaOndersteuntKeuze && !horecaDeadlineVerstreken && horecaKeuzeOpenAvondId === a.id){
-        horecaBlokHtml = `<div style="text-align:center;min-width:170px">
-            <div class="sub" style="margin-bottom:4px">${horeca}: opmerking</div>
-            <textarea id="horecaOpmerkingInput" maxlength="200" rows="2" placeholder="Opmerking (optioneel)" style="width:100%;resize:none;font-family:inherit;font-size:13px;color:var(--text);border:1px solid var(--border-strong);border-radius:var(--radius);padding:8px 10px;box-sizing:border-box;margin-bottom:6px">${escHtml(dinerOpmerking)}</textarea>
-            <button type="button" class="btn btn-sm btn-primary" style="width:100%;justify-content:center;margin-bottom:6px" onclick="kiesHorecaOpmerking('${a.id}','${l.id}')">Opslaan</button>
-            <button type="button" class="btn btn-sm" style="width:100%;justify-content:center" onclick="kiesHorecaUitschrijven('${a.id}','${l.id}')">Ik eet toch niet mee</button>
-          </div>`;
-      } else if(horeca){
+      if(horeca){
         const klikAttr = horecaDeadlineVerstreken
           ? `onclick="toonHorecaDeadlineInfo('${a.id}')"`
-          : (horecaOndersteuntKeuze ? `onclick="openHorecaKeuze('${a.id}')"` : '');
+          : (horecaOndersteuntKeuze ? `onclick="openHorecaOpmerkingModal('${a.id}')"` : '');
         // Deel 91, Kay's melding: een eerdere poging om de bovenste rij (hokje +
         // tekst) op een vaste hoogte te zetten (height:20px) loste de
         // scheefstand met het Bridge-blokje niet op -- vermoedelijk omdat de
@@ -5552,8 +5563,9 @@ async function setDiner(avondId, lidId, diner){
 }
 
 // Deel 86, Kay's verzoek: bij horeca-optie Lunch/Diner kan een lid een
-// opmerking meegeven bij de maaltijd (zie openHorecaKeuze/kiesHorecaOpmerking
-// hieronder, en de horecaBlokHtml-opbouw in renderAanwezigContent). Losse
+// opmerking meegeven bij de maaltijd (zie openHorecaOpmerkingModal/
+// kiesHorecaOpmerking hieronder, en de horecaBlokHtml-opbouw in
+// renderAanwezigContent). Losse
 // functie i.p.v. setDiner hergebruiken, want hier wordt de opmerking
 // bewust WEL expliciet meegegeven (i.p.v. de bestaande waarde te behouden).
 // Deel 164, Kay's verzoek: was eerst een Klassiek/Vegetarisch-keuze
@@ -5573,43 +5585,68 @@ async function setDinerKeuze(avondId, lidId, diner, opmerking){
   await renderAanwezigContent();
 }
 
-// Welke speelavond op dit moment de horeca-opmerking-keuze open heeft
-// staan bij Individuele > Aanmelden -- hoogstens één tegelijk, puur
-// weergave-state, niets opgeslagen.
-let horecaKeuzeOpenAvondId = null;
+// Deel 165, Kay's screenshot/verzoek: de horeca-opmerking bij Individuele >
+// Aanmelden (zelf aanmelden) staat voortaan in een echte pop-up
+// (horecaOpmerkingModal, met X-sluitknop) i.p.v. inline naast het
+// Bridge-blokje -- dat paste met een vaste min-width niet meer op een
+// iPhone-scherm. Zelfde .modal-overlay/.modal-box-patroon als de
+// Admin-modal (horecaKeuzeModal) hieronder, dus altijd binnen het scherm en
+// ook sluitbaar door naast de modal te klikken.
+let horecaOpmerkingModalAvondId = null;
 
-function openHorecaKeuze(avondId){
-  horecaKeuzeOpenAvondId = avondId;
-  renderAanwezigContent();
+function openHorecaOpmerkingModal(avondId){
+  const avond = speelavonden.find(a=>a.id===avondId);
+  const l = leden.find(x=>x.id===currentUser.id);
+  if(!avond || !l) return;
+  const bestaand = (aanwezigheidCache[avondId] || []).find(r=>r.lid_id===l.id);
+  const eetNu = bestaand?.diner === true;
+  const opmerkingNu = bestaand?.diner_opmerking || '';
+  horecaOpmerkingModalAvondId = avondId;
+  document.getElementById('horecaOpmerkingModal-inhoud').innerHTML = `
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;margin-bottom:4px">
+      <div style="font-weight:600">${avond.horeca || 'Horeca'}</div>
+      <button class="modal-sluit-knop" onclick="sluitHorecaOpmerkingModal()" title="Sluiten" aria-label="Sluiten">✕</button>
+    </div>
+    <div class="sub" style="margin-bottom:14px">${fmtDatumKort(avond.datum)}${eetNu ? '' : ' — nog niet aangemeld'}</div>
+    <textarea id="horecaOpmerkingInput" maxlength="200" rows="3" placeholder="Opmerking (optioneel)" style="width:100%;resize:none;font-family:inherit;font-size:15px;color:var(--text);border:1px solid var(--border-strong);border-radius:var(--radius);padding:8px 10px;box-sizing:border-box;margin-bottom:10px">${escHtml(opmerkingNu)}</textarea>
+    <button type="button" class="btn btn-primary" style="width:100%;justify-content:center;margin-bottom:8px" onclick="kiesHorecaOpmerking('${avondId}','${l.id}')">Opslaan</button>
+    <button type="button" class="btn btn-sm" style="width:100%;justify-content:center" onclick="kiesHorecaUitschrijven('${avondId}','${l.id}')">Ik eet toch niet mee</button>`;
+  document.getElementById('horecaOpmerkingModal').classList.remove('hidden');
+}
+
+function sluitHorecaOpmerkingModal(){
+  document.getElementById('horecaOpmerkingModal').classList.add('hidden');
+  horecaOpmerkingModalAvondId = null;
 }
 
 // Deel 164: leest de vrij getypte opmerking uit het textarea-veld (zie
-// horecaBlokHtml) i.p.v. een vaste Klassiek/Vegetarisch-knop door te geven.
-// Meervoudige witruimte/regeleindes worden tot spaties platgeslagen, zodat de
-// opmerking netjes op één regel past op de horecalijst (zie berekenHorecaLijstHtml).
+// openHorecaOpmerkingModal) i.p.v. een vaste Klassiek/Vegetarisch-knop door
+// te geven. Meervoudige witruimte/regeleindes worden tot spaties
+// platgeslagen, zodat de opmerking netjes op één regel past op de
+// horecalijst (zie berekenHorecaLijstHtml).
 async function kiesHorecaOpmerking(avondId, lidId){
   const avond = speelavonden.find(a=>a.id===avondId);
   if(avond && avondHorecaDeadlineVerstreken(avond)){
-    horecaKeuzeOpenAvondId = null;
+    sluitHorecaOpmerkingModal();
     toonInfoModal(meldingHorecaDeadlineGesloten(avond));
     await renderAanwezigContent();
     return;
   }
   const veld = document.getElementById('horecaOpmerkingInput');
   const opmerking = veld ? veld.value.replace(/\s+/g, ' ').trim().slice(0, 200) : '';
-  horecaKeuzeOpenAvondId = null;
+  sluitHorecaOpmerkingModal();
   await setDinerKeuze(avondId, lidId, true, opmerking || null);
 }
 
 async function kiesHorecaUitschrijven(avondId, lidId){
   const avond = speelavonden.find(a=>a.id===avondId);
   if(avond && avondHorecaDeadlineVerstreken(avond)){
-    horecaKeuzeOpenAvondId = null;
+    sluitHorecaOpmerkingModal();
     toonInfoModal(meldingHorecaDeadlineGesloten(avond));
     await renderAanwezigContent();
     return;
   }
-  horecaKeuzeOpenAvondId = null;
+  sluitHorecaOpmerkingModal();
   await setDinerKeuze(avondId, lidId, false, null);
 }
 
