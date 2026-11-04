@@ -682,7 +682,7 @@
       </p>
     </div>
 
-    <p style="font-size:11px;color:var(--text-muted);text-align:center;margin-top:24px;line-height:1.6">&copy; 2026 VanDeLinde Consulting BV<br>v3.11.0</p>
+    <p style="font-size:11px;color:var(--text-muted);text-align:center;margin-top:24px;line-height:1.6">&copy; 2026 VanDeLinde Consulting BV<br>v3.12.1</p>
   </div>
 </div>
 
@@ -1200,6 +1200,16 @@ function toast(msg){
   t.textContent = msg;
   t.classList.add('show');
   setTimeout(()=>t.classList.remove('show'), 2200);
+}
+
+// Deel 164, Kay's verzoek: de horeca-keuze (Klassiek/Vegetarisch) is
+// vervangen door een vrij Opmerkingen-veld dat leden zelf invullen (zie
+// kiesHorecaOpmerking e.a. hieronder) -- die tekst komt terecht in
+// innerHTML (kaartje, horecalijst, textarea-prefill) en moet dus geescaped
+// worden, anders kan een opmerking met <, >, & of aanhalingstekens de
+// opmaak breken of (bij kwaadwillig gebruik) ongewenste HTML injecteren.
+function escHtml(s){
+  return String(s ?? '').replace(/[&<>"']/g, c => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c]));
 }
 
 function naamVan(id){
@@ -3727,7 +3737,7 @@ async function loadGolfdashboardNietBridgeVoorAvond(avondId){
 
 // Indeler kiest (of corrigeert) het lid in de dropdown en bevestigt: de
 // deelnemer komt in de horeca-lijst terecht (diner=true), met behoud van de
-// bestaande aanwezig/vegetarisch-waarde -- zelfde patroon als setDiner/
+// bestaande aanwezig/diner_opmerking-waarde -- zelfde patroon als setDiner/
 // setDinerKeuze hieronder, nu hier omdat het om een Golfdashboard-rij gaat
 // i.p.v. een handmatige klik op het bestek-icoontje.
 async function bevestigGolfdashboardMatch(reviewId, avondId){
@@ -3746,7 +3756,7 @@ async function bevestigGolfdashboardMatch(reviewId, avondId){
     lid_id: lidId,
     aanwezig: bestaand?.aanwezig ?? false,
     diner: true,
-    vegetarisch: bestaand?.vegetarisch ?? false,
+    diner_opmerking: bestaand?.diner_opmerking ?? null,
     golfdashboard_gasten: rij.golfdashboard_gasten,
     golfdashboard_opmerkingen: rij.golfdashboard_opmerkingen,
     golfdashboard_gesynchroniseerd_op: new Date().toISOString()
@@ -4831,7 +4841,7 @@ async function renderAanwezigContent(){
       const record = records.find(r=>r.lid_id===l.id);
       const isBridge = record?.aanwezig === true;
       const isDiner = record?.diner === true;
-      const isVegetarisch = record?.vegetarisch === true;
+      const dinerOpmerking = record?.diner_opmerking || '';
       const horeca = a.horeca && a.horeca !== 'Geen' ? a.horeca : null;
       // Deel 86, Kay's verzoek: alleen bij Lunch/Diner is een maaltijdkeuze
       // (Klassiek/Vegetarisch) zinvol -- niet bij Borrel of een vrij
@@ -4859,28 +4869,31 @@ async function renderAanwezigContent(){
       // omhullende div (niet alleen het label) zodat ook een klik op het
       // tijd-tekstje eronder de tekst toont.
       // Deel 86, Kay's verzoek: bij Lunch/Diner opent een klik op het
-      // horeca-blokje voortaan een Klassiek/Vegetarisch-keuze i.p.v. de
-      // checkbox meteen om te zetten -- de keuze schrijft pas bij het
-      // aanklikken van Klassiek of Vegetarisch weg (zie kiesHorecaKeuze). Een
-      // nieuwe klik terwijl al aangemeld is opent dezelfde keuze weer, zodat
-      // hij te controleren/aan te passen is (met een uitschrijf-optie erbij).
-      // Bij Borrel/"Anders" (geen keuze-ondersteuning) blijft de simpele
-      // checkbox-toggle van hiervoor gewoon bestaan.
+      // horeca-blokje voortaan een keuze-blokje i.p.v. de checkbox meteen om
+      // te zetten -- de keuze schrijft pas bij het klikken op Opslaan weg
+      // (zie kiesHorecaOpmerking). Een nieuwe klik terwijl al aangemeld is
+      // opent dezelfde keuze weer, zodat hij te controleren/aan te passen is
+      // (met een uitschrijf-optie erbij). Bij Borrel/"Anders" (geen
+      // keuze-ondersteuning) blijft de simpele checkbox-toggle van hiervoor
+      // gewoon bestaan.
       // Deel 88, Kay's verzoek: geen apart "Annuleren" meer naast "Ik eet
       // toch niet mee" -- die knop is nu altijd zichtbaar (niet meer alleen
-      // als al aangemeld), even breed als Klassiek+Vegetarisch samen, en
-      // dient meteen als sluiten-zonder-wijzigen: wie de keuze wil
-      // wegklikken zonder iets te veranderen, bevestigt gewoon de
-      // (gemarkeerde) huidige keuze opnieuw.
+      // als al aangemeld) en dient meteen als sluiten-zonder-wijzigen: wie
+      // de keuze wil wegklikken zonder iets te veranderen, bevestigt gewoon
+      // de (eventueel ongewijzigde) opmerking opnieuw.
+      // Deel 164, Kay's verzoek: de harde Klassiek/Vegetarisch-keuze is
+      // vervangen door een vrij invulbaar Opmerkingen-veld -- leden typen nu
+      // zelf een eventuele opmerking (bv. "liever vegetarisch") i.p.v. uit
+      // twee vaste opties te kiezen. Opgeslagen in aanwezigheid.diner_opmerking
+      // (zie setDinerKeuze/kiesHorecaOpmerking hieronder) i.p.v. het oude
+      // vegetarisch-vlag, dat voortaan niet meer beschreven wordt.
       let horecaBlokHtml = '';
       if(horeca && horecaOndersteuntKeuze && !horecaDeadlineVerstreken && horecaKeuzeOpenAvondId === a.id){
-        horecaBlokHtml = `<div style="text-align:center;min-width:132px">
-            <div class="sub" style="margin-bottom:4px">${horeca}: kies</div>
-            <div style="display:flex;gap:6px">
-              <button type="button" class="btn btn-sm${isDiner && !isVegetarisch ? ' btn-primary' : ''}" style="flex:1;justify-content:center" onclick="kiesHorecaKeuze('${a.id}','${l.id}', false)">Klassiek</button>
-              <button type="button" class="btn btn-sm${isDiner && isVegetarisch ? ' btn-primary' : ''}" style="flex:1;justify-content:center" onclick="kiesHorecaKeuze('${a.id}','${l.id}', true)">Vegetarisch</button>
-            </div>
-            <button type="button" class="btn btn-sm" style="width:100%;justify-content:center;margin-top:6px" onclick="kiesHorecaUitschrijven('${a.id}','${l.id}')">Ik eet toch niet mee</button>
+        horecaBlokHtml = `<div style="text-align:center;min-width:170px">
+            <div class="sub" style="margin-bottom:4px">${horeca}: opmerking</div>
+            <textarea id="horecaOpmerkingInput" maxlength="200" rows="2" placeholder="Opmerking (optioneel)" style="width:100%;resize:none;font-family:inherit;font-size:13px;color:var(--text);border:1px solid var(--border-strong);border-radius:var(--radius);padding:8px 10px;box-sizing:border-box;margin-bottom:6px">${escHtml(dinerOpmerking)}</textarea>
+            <button type="button" class="btn btn-sm btn-primary" style="width:100%;justify-content:center;margin-bottom:6px" onclick="kiesHorecaOpmerking('${a.id}','${l.id}')">Opslaan</button>
+            <button type="button" class="btn btn-sm" style="width:100%;justify-content:center" onclick="kiesHorecaUitschrijven('${a.id}','${l.id}')">Ik eet toch niet mee</button>
           </div>`;
       } else if(horeca){
         const klikAttr = horecaDeadlineVerstreken
@@ -4904,7 +4917,7 @@ async function renderAanwezigContent(){
                 ? `<input type="checkbox" style="width:auto;pointer-events:none" ${isDiner ? 'checked' : ''} ${horecaDisabledAttr}><span>${horeca}</span>`
                 : `<label style="display:flex;align-items:center;gap:6px;cursor:pointer"><input type="checkbox" style="width:auto" ${isDiner ? 'checked' : ''} ${horecaDisabledAttr} onchange="handleZelfDinerWijziging(this,'${a.id}','${l.id}', this.checked)">${horeca}</label>`}
             </div>
-            <div class="sub" style="position:absolute;top:20px;left:0;right:0;font-size:11.5px">${horecaTijd}${isDiner && isVegetarisch && horecaOndersteuntKeuze ? ' · Vegetarisch' : ''}</div>
+            <div class="sub" style="position:absolute;top:20px;left:0;right:0;font-size:11.5px">${horecaTijd}${isDiner && dinerOpmerking && horecaOndersteuntKeuze ? ' · '+escHtml(dinerOpmerking.length > 28 ? dinerOpmerking.slice(0,28)+'…' : dinerOpmerking) : ''}</div>
           </div>`;
       }
       const bridgeBlokHtml = `<div style="text-align:center;position:relative;height:40px;min-width:80px${bridgeDeadlineVerstreken ? ';opacity:.4' : ''}" ${bridgeDeadlineVerstreken ? `onclick="toonBridgeDeadlineInfo('${a.id}')"` : ''}>
@@ -4982,28 +4995,29 @@ async function renderAanwezigContent(){
   paarGroepOverrideRows.forEach(r=>{ groepOverrideMap[r.paar_key] = r.groep; });
   const recordMap = {};
   const dinerMap = {};
-  const vegetarischMap = {};
-  records.forEach(r=>{ recordMap[r.lid_id] = r.aanwezig; dinerMap[r.lid_id] = r.diner; vegetarischMap[r.lid_id] = r.vegetarisch === true; });
+  const dinerOpmerkingMap = {};
+  records.forEach(r=>{ recordMap[r.lid_id] = r.aanwezig; dinerMap[r.lid_id] = r.diner; dinerOpmerkingMap[r.lid_id] = r.diner_opmerking || ''; });
   // Klein bestek-icoontje bij elke aangemelde speler in de indeling: groen als de
   // speler mee-eet (horeca), rood als niet. De beheerder kan er zelf op klikken om dit
   // om te zetten (bv. na een mailtje "ik blijf toch niet eten"), met een pop-up
   // waarschuwing om per ongeluk klikken te voorkomen. Deel 87: bij Lunch/Diner opent
-  // een klik voortaan de Klassiek/Vegetarisch-keuze (zie toggleHoreca/
-  // openHorecaKeuzeModal) i.p.v. de simpele confirm-toggle -- de tooltip laat hier
-  // ook meteen de huidige keuze zien.
+  // een klik voortaan de keuze-modal (zie toggleHoreca/openHorecaKeuzeModal) i.p.v.
+  // de simpele confirm-toggle -- de tooltip laat hier ook meteen de huidige opmerking
+  // zien. Deel 164: Klassiek/Vegetarisch vervangen door een vrij opmerkingenveld --
+  // het icoontje wordt 📝 zodra er een opmerking is, anders het gewone 🍴.
   const horecaIconHtml = (lidId) => {
     const eet = dinerMap[lidId] === true;
-    const vegetarisch = eet && vegetarischMap[lidId];
+    const opmerking = eet ? dinerOpmerkingMap[lidId] : '';
     const titel = eet
-      ? `Eet mee${vegetarisch ? ' (Vegetarisch)' : ''} — klik om aan te passen`
+      ? `Eet mee${opmerking ? ' ('+opmerking+')' : ''} — klik om aan te passen`
       : 'Eet niet mee — klik om aan te melden voor de horeca';
-    return `<span class="horeca-icoon" style="cursor:pointer;flex-shrink:0;display:inline-flex;align-items:center;justify-content:center;width:16px;height:16px;border-radius:50%;font-size:9px;background:${eet ? 'var(--success-bg)' : 'var(--danger-bg)'};color:${eet ? 'var(--success-text)' : 'var(--danger-text)'}" onclick="event.stopPropagation();toggleHoreca('${lidId}')" title="${titel}">${vegetarisch ? '🥕' : '🍴'}</span>`;
+    return `<span class="horeca-icoon" style="cursor:pointer;flex-shrink:0;display:inline-flex;align-items:center;justify-content:center;width:16px;height:16px;border-radius:50%;font-size:9px;background:${eet ? 'var(--success-bg)' : 'var(--danger-bg)'};color:${eet ? 'var(--success-text)' : 'var(--danger-text)'}" onclick="event.stopPropagation();toggleHoreca('${lidId}')" title="${escHtml(titel)}">${opmerking ? '📝' : '🍴'}</span>`;
   };
   // Zelfde bestek-icoontje, nu voor de eigen diner-vlag van een Invaller
   // (avond_invallers.diner rechtstreeks, want een Invaller heeft geen eigen
   // rij in `aanwezigheid`/dinerMap hierboven). Deel 89, Kay's verzoek: een
   // NIET-anonieme Invaller (eigen lid_id, zie deel 86) krijgt bij Lunch/Diner
-  // voortaan dezelfde Klassiek/Vegetarisch-keuze als een gewoon lid (via
+  // voortaan dezelfde keuze-modal als een gewoon lid (via
   // openHorecaKeuzeModalInvaller) -- een anonieme Invaller (geen lid_id, dus
   // geen naam om in de modal te tonen) behoudt de simpele confirm-toggle
   // hieronder.
@@ -5012,11 +5026,11 @@ async function renderAanwezigContent(){
     const avondVoorInvaller = speelavonden.find(a=>a.id===activeAvondAanwezigId);
     const horecaOndersteuntKeuzeInvaller = avondVoorInvaller?.horeca === 'Lunch' || avondVoorInvaller?.horeca === 'Diner';
     if(row.lid_id && horecaOndersteuntKeuzeInvaller){
-      const vegetarisch = eet && row.vegetarisch === true;
+      const opmerking = eet ? (row.diner_opmerking || '') : '';
       const titel = eet
-        ? `Eet mee${vegetarisch ? ' (Vegetarisch)' : ''} — klik om aan te passen`
+        ? `Eet mee${opmerking ? ' ('+opmerking+')' : ''} — klik om aan te passen`
         : 'Eet niet mee — klik om aan te melden voor de horeca';
-      return `<span class="horeca-icoon" style="cursor:pointer;flex-shrink:0;display:inline-flex;align-items:center;justify-content:center;width:16px;height:16px;border-radius:50%;font-size:9px;background:${eet ? 'var(--success-bg)' : 'var(--danger-bg)'};color:${eet ? 'var(--success-text)' : 'var(--danger-text)'}" onclick="event.stopPropagation();openHorecaKeuzeModalInvaller('${row.id}')" title="${titel}">${vegetarisch ? '🥕' : '🍴'}</span>`;
+      return `<span class="horeca-icoon" style="cursor:pointer;flex-shrink:0;display:inline-flex;align-items:center;justify-content:center;width:16px;height:16px;border-radius:50%;font-size:9px;background:${eet ? 'var(--success-bg)' : 'var(--danger-bg)'};color:${eet ? 'var(--success-text)' : 'var(--danger-text)'}" onclick="event.stopPropagation();openHorecaKeuzeModalInvaller('${row.id}')" title="${escHtml(titel)}">${opmerking ? '📝' : '🍴'}</span>`;
     }
     return `<span class="horeca-icoon" style="cursor:pointer;flex-shrink:0;display:inline-flex;align-items:center;justify-content:center;width:16px;height:16px;border-radius:50%;font-size:9px;background:${eet ? 'var(--success-bg)' : 'var(--danger-bg)'};color:${eet ? 'var(--success-text)' : 'var(--danger-text)'}" onclick="event.stopPropagation();toggleInvallerHoreca('${activeAvondAanwezigId}','${row.id}', ${eet})" title="${eet ? 'Eet mee — klik om af te melden voor de horeca' : 'Eet niet mee — klik om aan te melden voor de horeca'}">🍴</span>`;
   };
@@ -5501,16 +5515,16 @@ async function handleZelfDinerWijziging(el, avondId, lidId, diner){
 async function setAanwezig(avondId, lidId, aanwezig){
   // Bestaande diner-registratie (indien aanwezig) expliciet meesturen, zodat een
   // upsert die alleen 'aanwezig' bedoelt die niet per ongeluk overschrijft.
-  // Deel 86: ook de vegetarisch-keuze expliciet meesturen, om dezelfde reden
-  // -- anders zou een simpele aan/afmelden hier ongemerkt de eerder gemaakte
-  // Klassiek/Vegetarisch-keuze wissen.
+  // Deel 86/164: ook de diner-opmerking expliciet meesturen, om dezelfde reden
+  // -- anders zou een simpele aan/afmelden hier ongemerkt de eerder ingevulde
+  // opmerking wissen.
   const bestaand = (aanwezigheidCache[avondId] || []).find(r=>r.lid_id===lidId);
   const { error } = await db.from('aanwezigheid').upsert({
     speelavond_id: avondId,
     lid_id: lidId,
     aanwezig,
     diner: bestaand?.diner ?? false,
-    vegetarisch: bestaand?.vegetarisch ?? false
+    diner_opmerking: bestaand?.diner_opmerking ?? null
   }, { onConflict: 'speelavond_id,lid_id' });
 
   if(error){ toast('Opslaan mislukt'); return; }
@@ -5520,16 +5534,16 @@ async function setAanwezig(avondId, lidId, aanwezig){
 
 async function setDiner(avondId, lidId, diner){
   // Bestaande bridge-aanmelding (indien aanwezig) expliciet meesturen, om diezelfde
-  // reden als hierboven bij setAanwezig. Deel 86: idem voor vegetarisch -- dit
-  // pad (handleZelfDinerWijziging voor horeca zonder Klassiek/Vegetarisch-keuze,
-  // en de Admin-toggle toggleHoreca) mag de eerder gemaakte keuze niet wissen.
+  // reden als hierboven bij setAanwezig. Deel 86/164: idem voor de diner-opmerking --
+  // dit pad (handleZelfDinerWijziging voor horeca zonder opmerkingenveld, en de
+  // Admin-toggle toggleHoreca) mag de eerder ingevulde opmerking niet wissen.
   const bestaand = (aanwezigheidCache[avondId] || []).find(r=>r.lid_id===lidId);
   const { error } = await db.from('aanwezigheid').upsert({
     speelavond_id: avondId,
     lid_id: lidId,
     aanwezig: bestaand?.aanwezig ?? false,
     diner,
-    vegetarisch: bestaand?.vegetarisch ?? false
+    diner_opmerking: bestaand?.diner_opmerking ?? null
   }, { onConflict: 'speelavond_id,lid_id' });
 
   if(error){ toast('Opslaan mislukt'); return; }
@@ -5537,19 +5551,21 @@ async function setDiner(avondId, lidId, diner){
   await renderAanwezigContent();
 }
 
-// Deel 86, Kay's verzoek: bij horeca-optie Lunch/Diner kan een lid kiezen
-// tussen Klassiek en Vegetarisch (zie openHorecaKeuze/kiesHorecaKeuze
+// Deel 86, Kay's verzoek: bij horeca-optie Lunch/Diner kan een lid een
+// opmerking meegeven bij de maaltijd (zie openHorecaKeuze/kiesHorecaOpmerking
 // hieronder, en de horecaBlokHtml-opbouw in renderAanwezigContent). Losse
-// functie i.p.v. setDiner hergebruiken, want hier wordt vegetarisch
+// functie i.p.v. setDiner hergebruiken, want hier wordt de opmerking
 // bewust WEL expliciet meegegeven (i.p.v. de bestaande waarde te behouden).
-async function setDinerKeuze(avondId, lidId, diner, vegetarisch){
+// Deel 164, Kay's verzoek: was eerst een Klassiek/Vegetarisch-keuze
+// (vegetarisch-vlag) -- vervangen door dit vrije opmerkingenveld.
+async function setDinerKeuze(avondId, lidId, diner, opmerking){
   const bestaand = (aanwezigheidCache[avondId] || []).find(r=>r.lid_id===lidId);
   const { error } = await db.from('aanwezigheid').upsert({
     speelavond_id: avondId,
     lid_id: lidId,
     aanwezig: bestaand?.aanwezig ?? false,
     diner,
-    vegetarisch
+    diner_opmerking: opmerking
   }, { onConflict: 'speelavond_id,lid_id' });
 
   if(error){ toast('Opslaan mislukt'); return; }
@@ -5557,7 +5573,7 @@ async function setDinerKeuze(avondId, lidId, diner, vegetarisch){
   await renderAanwezigContent();
 }
 
-// Welke speelavond op dit moment de Klassiek/Vegetarisch-keuze open heeft
+// Welke speelavond op dit moment de horeca-opmerking-keuze open heeft
 // staan bij Individuele > Aanmelden -- hoogstens één tegelijk, puur
 // weergave-state, niets opgeslagen.
 let horecaKeuzeOpenAvondId = null;
@@ -5567,7 +5583,11 @@ function openHorecaKeuze(avondId){
   renderAanwezigContent();
 }
 
-async function kiesHorecaKeuze(avondId, lidId, vegetarisch){
+// Deel 164: leest de vrij getypte opmerking uit het textarea-veld (zie
+// horecaBlokHtml) i.p.v. een vaste Klassiek/Vegetarisch-knop door te geven.
+// Meervoudige witruimte/regeleindes worden tot spaties platgeslagen, zodat de
+// opmerking netjes op één regel past op de horecalijst (zie berekenHorecaLijstHtml).
+async function kiesHorecaOpmerking(avondId, lidId){
   const avond = speelavonden.find(a=>a.id===avondId);
   if(avond && avondHorecaDeadlineVerstreken(avond)){
     horecaKeuzeOpenAvondId = null;
@@ -5575,8 +5595,10 @@ async function kiesHorecaKeuze(avondId, lidId, vegetarisch){
     await renderAanwezigContent();
     return;
   }
+  const veld = document.getElementById('horecaOpmerkingInput');
+  const opmerking = veld ? veld.value.replace(/\s+/g, ' ').trim().slice(0, 200) : '';
   horecaKeuzeOpenAvondId = null;
-  await setDinerKeuze(avondId, lidId, true, vegetarisch);
+  await setDinerKeuze(avondId, lidId, true, opmerking || null);
 }
 
 async function kiesHorecaUitschrijven(avondId, lidId){
@@ -5588,7 +5610,7 @@ async function kiesHorecaUitschrijven(avondId, lidId){
     return;
   }
   horecaKeuzeOpenAvondId = null;
-  await setDinerKeuze(avondId, lidId, false, false);
+  await setDinerKeuze(avondId, lidId, false, null);
 }
 
 function toonInfoModal(tekst){
@@ -5610,7 +5632,7 @@ function bevestigUitschrijven(lidId){
 // een mailtje "ik blijf toch niet eten") — altijd met een pop-up waarschuwing, om een
 // per-ongeluk-klik te voorkomen.
 // Deel 87, Kay's verzoek: bij Lunch/Diner opent dit voortaan dezelfde
-// Klassiek/Vegetarisch-keuze als op de individuele aanmeldpagina (deel 86,
+// opmerkingen-keuze als op de individuele aanmeldpagina (deel 86/164,
 // zie setDinerKeuze), via horecaKeuzeModal -- i.p.v. de simpele
 // confirm-toggle hieronder, die alleen nog geldt bij Borrel/"Anders" (geen
 // maaltijdkeuze van toepassing) of geen horeca.
@@ -5637,25 +5659,25 @@ let horecaKeuzeAdminLidId = null;
 let horecaKeuzeAdminInvallerRowId = null;
 
 // Deel 88, Kay's verzoek: geen apart "Annuleren" meer -- "Ik eet toch niet
-// mee" is nu altijd zichtbaar (niet meer alleen als al aangemeld) en even
-// breed als Klassiek+Vegetarisch samen. Sluiten zonder wijzigen kan door de
-// al-gemarkeerde huidige keuze opnieuw te bevestigen, of door naast de modal
-// te klikken (zie de modal-overlay hierboven).
+// mee" is nu altijd zichtbaar (niet meer alleen als al aangemeld). Sluiten
+// zonder wijzigen kan door naast de modal te klikken (zie de modal-overlay
+// hierboven), of door de (eventueel ongewijzigde) opmerking opnieuw op te
+// slaan.
+// Deel 164, Kay's verzoek: de harde Klassiek/Vegetarisch-keuze is ook hier
+// (Admin-kant) vervangen door een vrij Opmerkingen-veld.
 function openHorecaKeuzeModal(lidId){
   const avond = speelavonden.find(a=>a.id===activeAvondAanwezigId);
   const bestaand = (aanwezigheidCache[activeAvondAanwezigId] || []).find(r=>r.lid_id===lidId);
   const eetNu = bestaand?.diner === true;
-  const vegetarischNu = bestaand?.vegetarisch === true;
+  const opmerkingNu = bestaand?.diner_opmerking || '';
   const lid = leden.find(l=>l.id===lidId);
   const naam = lid ? `${lid.voornaam} ${lid.achternaam}` : 'deze speler';
   horecaKeuzeAdminLidId = lidId;
   document.getElementById('horecaKeuzeModal-inhoud').innerHTML = `
-    <div style="font-weight:600;margin-bottom:4px">${naam}</div>
+    <div style="font-weight:600;margin-bottom:4px">${escHtml(naam)}</div>
     <div class="sub" style="margin-bottom:14px">${avond?.horeca || 'Horeca'}${eetNu ? '' : ' — nog niet aangemeld'}</div>
-    <div style="display:flex;gap:8px;margin-bottom:8px">
-      <button type="button" class="btn btn-sm${eetNu && !vegetarischNu ? ' btn-primary' : ''}" style="flex:1;justify-content:center" onclick="kiesHorecaKeuzeAdmin(false)">Klassiek</button>
-      <button type="button" class="btn btn-sm${eetNu && vegetarischNu ? ' btn-primary' : ''}" style="flex:1;justify-content:center" onclick="kiesHorecaKeuzeAdmin(true)">Vegetarisch</button>
-    </div>
+    <textarea id="horecaKeuzeModal-opmerking" maxlength="200" rows="2" placeholder="Opmerking (optioneel)" style="width:100%;resize:none;font-family:inherit;font-size:13px;color:var(--text);border:1px solid var(--border-strong);border-radius:var(--radius);padding:8px 10px;box-sizing:border-box;margin-bottom:8px">${escHtml(opmerkingNu)}</textarea>
+    <button type="button" class="btn btn-sm btn-primary" style="width:100%;justify-content:center;margin-bottom:8px" onclick="kiesHorecaOpmerkingAdmin()">${eetNu ? 'Opslaan' : 'Aanmelden'}</button>
     <button type="button" class="btn btn-sm" style="width:100%;justify-content:center" onclick="kiesHorecaUitschrijvenAdmin()">Ik eet toch niet mee</button>`;
   document.getElementById('horecaKeuzeModal').classList.remove('hidden');
 }
@@ -5666,25 +5688,27 @@ function sluitHorecaKeuzeModal(){
   horecaKeuzeAdminInvallerRowId = null;
 }
 
-async function kiesHorecaKeuzeAdmin(vegetarisch){
+async function kiesHorecaOpmerkingAdmin(){
   if(!horecaKeuzeAdminLidId || indelingLocked(activeAvondAanwezigId)){ sluitHorecaKeuzeModal(); return; }
   const lidId = horecaKeuzeAdminLidId;
+  const veld = document.getElementById('horecaKeuzeModal-opmerking');
+  const opmerking = veld ? veld.value.replace(/\s+/g, ' ').trim().slice(0, 200) : '';
   sluitHorecaKeuzeModal();
-  await setDinerKeuze(activeAvondAanwezigId, lidId, true, vegetarisch);
+  await setDinerKeuze(activeAvondAanwezigId, lidId, true, opmerking || null);
 }
 
 async function kiesHorecaUitschrijvenAdmin(){
   if(!horecaKeuzeAdminLidId || indelingLocked(activeAvondAanwezigId)){ sluitHorecaKeuzeModal(); return; }
   const lidId = horecaKeuzeAdminLidId;
   sluitHorecaKeuzeModal();
-  await setDinerKeuze(activeAvondAanwezigId, lidId, false, false);
+  await setDinerKeuze(activeAvondAanwezigId, lidId, false, null);
 }
 
-// Deel 89, Kay's verzoek: dezelfde Klassiek/Vegetarisch-modal als hierboven,
-// nu voor een NIET-anonieme Invaller (eigen lid_id) -- schrijft naar
-// avond_invallers i.p.v. aanwezigheid, zie setInvallerDinerKeuze. Een
-// anonieme Invaller heeft geen naam om te tonen en behoudt de simpele
-// confirm-toggle (toggleInvallerHoreca / invallerHorecaIconHtml hierboven).
+// Deel 89, Kay's verzoek: dezelfde opmerkingen-modal als hierboven, nu voor
+// een NIET-anonieme Invaller (eigen lid_id) -- schrijft naar avond_invallers
+// i.p.v. aanwezigheid, zie setInvallerDinerKeuze. Een anonieme Invaller
+// heeft geen naam om te tonen en behoudt de simpele confirm-toggle
+// (toggleInvallerHoreca / invallerHorecaIconHtml hierboven).
 function openHorecaKeuzeModalInvaller(invallerRowId){
   const avond = speelavonden.find(a=>a.id===activeAvondAanwezigId);
   const row = (invallerCache[activeAvondAanwezigId] || []).find(r=>r.id===invallerRowId);
@@ -5692,25 +5716,25 @@ function openHorecaKeuzeModalInvaller(invallerRowId){
   const lid = leden.find(l=>l.id===row.lid_id);
   const naam = lid ? `${lid.voornaam} ${lid.achternaam} (Invaller)` : 'deze invaller';
   const eetNu = row.diner === true;
-  const vegetarischNu = row.vegetarisch === true;
+  const opmerkingNu = row.diner_opmerking || '';
   horecaKeuzeAdminInvallerRowId = invallerRowId;
   document.getElementById('horecaKeuzeModal-inhoud').innerHTML = `
-    <div style="font-weight:600;margin-bottom:4px">${naam}</div>
+    <div style="font-weight:600;margin-bottom:4px">${escHtml(naam)}</div>
     <div class="sub" style="margin-bottom:14px">${avond?.horeca || 'Horeca'}${eetNu ? '' : ' — nog niet aangemeld'}</div>
-    <div style="display:flex;gap:8px;margin-bottom:8px">
-      <button type="button" class="btn btn-sm${eetNu && !vegetarischNu ? ' btn-primary' : ''}" style="flex:1;justify-content:center" onclick="kiesHorecaKeuzeAdminInvaller(false)">Klassiek</button>
-      <button type="button" class="btn btn-sm${eetNu && vegetarischNu ? ' btn-primary' : ''}" style="flex:1;justify-content:center" onclick="kiesHorecaKeuzeAdminInvaller(true)">Vegetarisch</button>
-    </div>
+    <textarea id="horecaKeuzeModal-opmerking" maxlength="200" rows="2" placeholder="Opmerking (optioneel)" style="width:100%;resize:none;font-family:inherit;font-size:13px;color:var(--text);border:1px solid var(--border-strong);border-radius:var(--radius);padding:8px 10px;box-sizing:border-box;margin-bottom:8px">${escHtml(opmerkingNu)}</textarea>
+    <button type="button" class="btn btn-sm btn-primary" style="width:100%;justify-content:center;margin-bottom:8px" onclick="kiesHorecaOpmerkingAdminInvaller()">${eetNu ? 'Opslaan' : 'Aanmelden'}</button>
     <button type="button" class="btn btn-sm" style="width:100%;justify-content:center" onclick="kiesHorecaUitschrijvenAdminInvaller()">Ik eet toch niet mee</button>`;
   document.getElementById('horecaKeuzeModal').classList.remove('hidden');
 }
 
-async function kiesHorecaKeuzeAdminInvaller(vegetarisch){
+async function kiesHorecaOpmerkingAdminInvaller(){
   if(!horecaKeuzeAdminInvallerRowId || indelingLocked(activeAvondAanwezigId)){ sluitHorecaKeuzeModal(); return; }
   const invallerRowId = horecaKeuzeAdminInvallerRowId;
   const avondId = activeAvondAanwezigId;
+  const veld = document.getElementById('horecaKeuzeModal-opmerking');
+  const opmerking = veld ? veld.value.replace(/\s+/g, ' ').trim().slice(0, 200) : '';
   sluitHorecaKeuzeModal();
-  await setInvallerDinerKeuze(avondId, invallerRowId, true, vegetarisch);
+  await setInvallerDinerKeuze(avondId, invallerRowId, true, opmerking || null);
 }
 
 async function kiesHorecaUitschrijvenAdminInvaller(){
@@ -5718,14 +5742,15 @@ async function kiesHorecaUitschrijvenAdminInvaller(){
   const invallerRowId = horecaKeuzeAdminInvallerRowId;
   const avondId = activeAvondAanwezigId;
   sluitHorecaKeuzeModal();
-  await setInvallerDinerKeuze(avondId, invallerRowId, false, false);
+  await setInvallerDinerKeuze(avondId, invallerRowId, false, null);
 }
 
 // Zelfde soort losse functie als setDinerKeuze (aanwezigheid), nu voor
-// avond_invallers -- vegetarisch wordt hier ook bewust altijd expliciet
-// meegegeven i.p.v. een bestaande waarde te behouden.
-async function setInvallerDinerKeuze(avondId, invallerRowId, diner, vegetarisch){
-  const { error } = await db.from('avond_invallers').update({ diner, vegetarisch }).eq('id', invallerRowId);
+// avond_invallers -- de opmerking wordt hier ook bewust altijd expliciet
+// meegegeven i.p.v. een bestaande waarde te behouden. Deel 164: was eerst
+// een vegetarisch-vlag, nu een vrij opmerkingenveld.
+async function setInvallerDinerKeuze(avondId, invallerRowId, diner, opmerking){
+  const { error } = await db.from('avond_invallers').update({ diner, diner_opmerking: opmerking }).eq('id', invallerRowId);
   if(error){ toast('Bijwerken mislukt'); return; }
   delete invallerCache[avondId];
   await renderAanwezigContent();
@@ -5826,7 +5851,10 @@ async function berekenHorecaLijstHtml(avondId){
   ]);
   // Deel 86: vegetarisch-keuze van de attendance-rij meegeven aan het
   // lid-object, zodat de namenlijst hieronder (scherm/print/mail) "(Vegetarisch)"
-  // achter de naam kan tonen.
+  // achter de naam kan tonen. Deel 164: die harde keuze is vervangen door een
+  // vrij Opmerkingen-veld (diner_opmerking) -- die tekst komt hieronder op
+  // dezelfde manier tussen haakjes achter de naam, samen met (indien aanwezig)
+  // de golfdashboard_opmerkingen hieronder.
   // Deel 118: golfdashboard_gasten (extra gasten bovenop het lid zelf, zie
   // berekenAvondTellingen hierboven) ook meegeven, zodat de namenlijst
   // "Naam +N" kan tonen zoals Kay gevraagd heeft.
@@ -5839,15 +5867,18 @@ async function berekenHorecaLijstHtml(avondId){
     .filter(r=>r.diner===true)
     .map(r=>{
       const lid = leden.find(l=>l.id===r.lid_id);
-      return lid ? { ...lid, vegetarisch: r.vegetarisch === true, gasten: r.golfdashboard_gasten || 0, opmerkingen: r.golfdashboard_opmerkingen || '' } : null;
+      if(!lid) return null;
+      const opmerkingDelen = [r.diner_opmerking, r.golfdashboard_opmerkingen].filter(Boolean);
+      return { ...lid, vegetarisch: r.vegetarisch === true, gasten: r.golfdashboard_gasten || 0, opmerkingen: opmerkingDelen.join('; ') };
     })
     .filter(Boolean);
   // Deel 55: een Invaller die voor deze avond op "eet mee" staat, hoort ook op
   // de horeca-lijst -- met alleen zijn/haar (pseudo-)naam, geen e-mailadres,
   // dus deze komt nooit in een mail-aan-leden terecht, uitsluitend hier op de
-  // horeca-lijst zelf. Geen Golfdashboard-koppeling, dus gasten:0 en geen opmerking.
+  // horeca-lijst zelf. Geen Golfdashboard-koppeling, dus gasten:0; de
+  // opmerking (deel 164) komt uit avond_invallers.diner_opmerking.
   invallerRowsVoorHoreca.filter(row=>row.diner===true).forEach(row=>{
-    eters.push({ voornaam: invallerLabel(row, invallerRowsVoorHoreca), achternaam: '', vegetarisch: row.vegetarisch === true, gasten: 0, opmerkingen: '' });
+    eters.push({ voornaam: invallerLabel(row, invallerRowsVoorHoreca), achternaam: '', vegetarisch: row.vegetarisch === true, gasten: 0, opmerkingen: row.diner_opmerking || '' });
   });
   eters.sort((a,b)=>a.voornaam.localeCompare(b.voornaam));
 
@@ -5876,7 +5907,7 @@ async function berekenHorecaLijstHtml(avondId){
   // niet meer comfortabel is, gaat de lijst over 2 of 3 kolommen verdelen.
   const naamHtml = (l,i) => `<div style="display:flex;gap:8px;padding:5px 2px;border-bottom:1px solid var(--border);break-inside:avoid">
         <span style="color:var(--text-secondary);width:20px;flex-shrink:0">${i+1}</span>
-        <span>${l.voornaam} ${l.achternaam}${l.gasten ? ' +'+l.gasten : ''}${l.vegetarisch ? ' (Vegetarisch)' : ''}${l.opmerkingen ? ' ('+l.opmerkingen+')' : ''}</span>
+        <span>${escHtml(l.voornaam)} ${escHtml(l.achternaam)}${l.gasten ? ' +'+l.gasten : ''}${l.vegetarisch ? ' (Vegetarisch)' : ''}${l.opmerkingen ? ' ('+escHtml(l.opmerkingen)+')' : ''}</span>
       </div>`;
   const kolommenHtml = eters.length
     ? `<div style="columns:${berekenHorecaKolomAantal(eters.length)};column-gap:14px">${eters.map((l,i)=>naamHtml(l,i)).join('')}</div>`
@@ -5892,7 +5923,7 @@ async function berekenHorecaLijstHtml(avondId){
       <div style="font-weight:600;font-size:13px;color:var(--text-secondary);margin-bottom:6px">Niet-Bridge</div>
       <div>${nietBridge.map((p,i)=>`<div style="display:flex;gap:8px;padding:5px 2px;border-bottom:1px solid var(--border);break-inside:avoid">
             <span style="color:var(--text-secondary);width:20px;flex-shrink:0">${i+1}</span>
-            <span>${p.naam}${p.gasten ? ' +'+p.gasten : ''}${p.opmerkingen ? ' ('+p.opmerkingen+')' : ''}</span>
+            <span>${escHtml(p.naam)}${p.gasten ? ' +'+p.gasten : ''}${p.opmerkingen ? ' ('+escHtml(p.opmerkingen)+')' : ''}</span>
           </div>`).join('')}</div>
     </div>` : '';
 
@@ -6140,7 +6171,7 @@ function drukHorecaLijstAf(){
   // eenmans-kolommen naast elkaar.
   const rijHtml = (l,i) => `<div style="display:flex;gap:6px;padding:5px 6px;border-bottom:1px solid #ddd;break-inside:avoid">
         <span style="color:#666;width:20px;flex-shrink:0">${i+1}</span>
-        <span>${l.voornaam} ${l.achternaam}${l.gasten ? ' +'+l.gasten : ''}${l.vegetarisch ? ' (Vegetarisch)' : ''}${l.opmerkingen ? ' ('+l.opmerkingen+')' : ''}</span>
+        <span>${escHtml(l.voornaam)} ${escHtml(l.achternaam)}${l.gasten ? ' +'+l.gasten : ''}${l.vegetarisch ? ' (Vegetarisch)' : ''}${l.opmerkingen ? ' ('+escHtml(l.opmerkingen)+')' : ''}</span>
       </div>`;
 
   const lijstHtml = `
@@ -6162,7 +6193,7 @@ function drukHorecaLijstAf(){
           <div style="font-size:12px;font-weight:700;color:#555;margin-bottom:4px">Niet-Bridge</div>
           <div style="font-size:13px">${nietBridge.map((p,i)=>`<div style="display:flex;gap:6px;padding:5px 6px;border-bottom:1px solid #ddd;break-inside:avoid">
                 <span style="color:#666;width:20px;flex-shrink:0">${i+1}</span>
-                <span>${p.naam}${p.gasten ? ' +'+p.gasten : ''}${p.opmerkingen ? ' ('+p.opmerkingen+')' : ''}</span>
+                <span>${escHtml(p.naam)}${p.gasten ? ' +'+p.gasten : ''}${p.opmerkingen ? ' ('+escHtml(p.opmerkingen)+')' : ''}</span>
               </div>`).join('')}</div>
         </div>` : ''}
     </div>`;
