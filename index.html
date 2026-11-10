@@ -682,7 +682,7 @@
       </p>
     </div>
 
-    <p style="font-size:11px;color:var(--text-muted);text-align:center;margin-top:24px;line-height:1.6">&copy; 2026 VanDeLinde Consulting BV<br>v3.13.0</p>
+    <p style="font-size:11px;color:var(--text-muted);text-align:center;margin-top:24px;line-height:1.6">&copy; 2026 VanDeLinde Consulting BV<br>v3.13.1</p>
   </div>
 </div>
 
@@ -9147,9 +9147,22 @@ function herlaadKoffertjesHuidigeScherm(){
 // hier: het openen van de datumkiezer-modal (openKoffertjeOphaaldatumModal /
 // openKoffertjeBestelModal) mét een eigen "Bestellen"-knop is zelf al de
 // bevestigingsstap, dus een extra browser-confirm() zou dubbelop zijn.
+// Deel 166, Kay's melding (koffertje 51 stond dubbel open): deze
+// beschikbaarheidscheck is de laatste/enige bewaking tegen het twee keer
+// uitgeven van hetzelfde koffertjenummer -- er is geen database-constraint
+// die dit ook afdwingt. Las voorheen loadKoffertjeOpen()/loadKoffertjeBlokkades()
+// ZONDER force: als dit scherm die lijst al eerder in deze sessie had
+// ingeladen, werd die gecachte (mogelijk inmiddels verouderde) versie
+// gebruikt in plaats van de actuele stand. Daardoor kon een bestelling die
+// een ander scherm/apparaat vlak daarvoor had geplaatst hier gemist worden
+// -- precies wat er gebeurde: Aina bestelde koffertje 51 zelf, en 6 minuten
+// later gaf de Balie (op basis van een nog niet ververste lijst) hetzelfde
+// nummer nog een keer rechtstreeks aan haar uit. Nu altijd eerst vers
+// ophalen (force:true) vlak vóór deze check, zodat hij nooit meer op
+// verouderde data kan afgaan.
 async function bestelKoffertje(nummer, lidIdOverride, directUitgeven, gewensteDatum){
   const lidId = lidIdOverride || currentUser.id;
-  const [open, blokkades] = await Promise.all([loadKoffertjeOpen(), loadKoffertjeBlokkades()]);
+  const [open, blokkades] = await Promise.all([loadKoffertjeOpen(true), loadKoffertjeBlokkades(true)]);
 
   if(open.some(r=>r.koffertje_nummer===nummer) || blokkades.some(r=>r.koffertje_nummer===nummer)){
     toast('Dit koffertje is niet meer beschikbaar');
