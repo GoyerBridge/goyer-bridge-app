@@ -682,7 +682,7 @@
       </p>
     </div>
 
-    <p style="font-size:11px;color:var(--text-muted);text-align:center;margin-top:24px;line-height:1.6">&copy; 2026 VanDeLinde Consulting BV<br>v3.13.1</p>
+    <p style="font-size:11px;color:var(--text-muted);text-align:center;margin-top:24px;line-height:1.6">&copy; 2026 VanDeLinde Consulting BV<br>v3.14.0</p>
   </div>
 </div>
 
@@ -3914,9 +3914,87 @@ function indelingLocked(avondId){
   return true;
 }
 
+// Deel 168, Kay's verzoek: één "Ongedaan maken"-knop voor de Indeling-pagina
+// die precies de laatste koppel-, loskoppel- of volgorde/lijn-actie
+// terugdraait (handmatig koppelen/loskoppelen/herstellen/wissen, slepen van
+// de volgorde of naar een andere lijn, "Automatisch indelen", "Indeling
+// husselen" en "Indeling wissen" horen daar allemaal bij -- scope bewust
+// beperkt tot de indeling zelf, dus NIET aanwezigheid, diner-keuzes of
+// Invaller-wijzigingen, die een ander deel van hetzelfde scherm zijn).
+// Werkwijze: vlak VOORDAT een van die acties iets wijzigt, wordt een "foto"
+// (snapshot) genomen van de vier avond_*-tabellen die de indeling voor déze
+// avond bepalen. Ongedaan maken zet die foto terug: huidige rijen in die
+// vier tabellen weg, foto-rijen opnieuw invoegen -- zelfde
+// verwijderen-dan-invoegen-patroon als de rest van deze app (zie
+// persistParenVolgorde/persistParenGroepOverride hieronder). Bewust maar één
+// stap diep (geen hele geschiedenis): na ongedaan maken verdwijnt de knop
+// weer. Dat is voorspelbaarder dan een stapel bijhouden, en dekt precies "de
+// laatste actie" waar Kay om vroeg.
+let laatsteIndelingActie = null; // { avondId, label, snapshot } of null
+
+async function maakIndelingSnapshot(avondId){
+  const [parenR, losgekoppeldR, groepR, volgordeR] = await Promise.all([
+    db.from('avond_voorkeur_paren').select('*').eq('speelavond_id', avondId),
+    db.from('avond_losgekoppeld').select('*').eq('speelavond_id', avondId),
+    db.from('avond_paar_groep').select('*').eq('speelavond_id', avondId),
+    db.from('avond_paar_volgorde').select('*').eq('speelavond_id', avondId)
+  ]);
+  return {
+    paren: parenR.data || [],
+    losgekoppeld: losgekoppeldR.data || [],
+    groep: groepR.data || [],
+    volgorde: volgordeR.data || []
+  };
+}
+
+function registreerIndelingUndo(avondId, label, snapshot){
+  laatsteIndelingActie = { avondId, label, snapshot };
+}
+
+// Verwijdert id/created_at (als die bestaan) voordat een gefotografeerde rij
+// opnieuw wordt ingevoegd -- zelfde aanpak als persistParenVolgorde/
+// persistParenGroepOverride, die ook altijd verse rijen invoegen in plaats
+// van oude id's te hergebruiken.
+const strijpIdVoorHerinvoegen = rij => {
+  const { id, created_at, ...rest } = rij;
+  return rest;
+};
+
+async function ongedaanMakenIndelingActie(){
+  const actie = laatsteIndelingActie;
+  if(!actie) return;
+  if(indelingLocked(actie.avondId)) return;
+  const { avondId, snapshot } = actie;
+
+  await Promise.all([
+    db.from('avond_voorkeur_paren').delete().eq('speelavond_id', avondId),
+    db.from('avond_losgekoppeld').delete().eq('speelavond_id', avondId),
+    db.from('avond_paar_groep').delete().eq('speelavond_id', avondId),
+    db.from('avond_paar_volgorde').delete().eq('speelavond_id', avondId)
+  ]);
+  const herinvoegingen = [];
+  if(snapshot.paren.length) herinvoegingen.push(db.from('avond_voorkeur_paren').insert(snapshot.paren.map(strijpIdVoorHerinvoegen)));
+  if(snapshot.losgekoppeld.length) herinvoegingen.push(db.from('avond_losgekoppeld').insert(snapshot.losgekoppeld.map(strijpIdVoorHerinvoegen)));
+  if(snapshot.groep.length) herinvoegingen.push(db.from('avond_paar_groep').insert(snapshot.groep.map(strijpIdVoorHerinvoegen)));
+  if(snapshot.volgorde.length) herinvoegingen.push(db.from('avond_paar_volgorde').insert(snapshot.volgorde.map(strijpIdVoorHerinvoegen)));
+  const resultaten = await Promise.all(herinvoegingen);
+  if(resultaten.some(r=>r.error)){
+    toast('Ongedaan maken is niet helemaal gelukt — controleer de indeling');
+  }
+
+  delete voorkeurParenCache[avondId];
+  delete losgekoppeldCache[avondId];
+  delete paarGroepOverrideCache[avondId];
+  delete parenVolgordeCache[avondId];
+  laatsteIndelingActie = null;
+  await renderAanwezigContent();
+  toast(`Ongedaan gemaakt: ${actie.label}`);
+}
+
 async function kiesHandmatigPartner(avondId, lidId, partnerId){
   if(indelingLocked(avondId)) return;
   if(!partnerId || lidId===partnerId) return;
+  const indelingSnapshot = await maakIndelingSnapshot(avondId);
   // Eventuele bestaande voorstellen van beide betrokkenen op deze avond eerst opruimen,
   // zodat niemand per ongeluk in twee voorstel-koppelingen tegelijk terechtkomt.
   await db.from('avond_voorkeur_paren').delete().eq('speelavond_id', avondId)
@@ -3928,6 +4006,7 @@ async function kiesHandmatigPartner(avondId, lidId, partnerId){
     speelavond_id: avondId, lid_a_id: lidId, lid_b_id: partnerId
   });
   if(error){ toast('Koppelen mislukt'); return; }
+  registreerIndelingUndo(avondId, 'Koppeling aangepast', indelingSnapshot);
   delete voorkeurParenCache[avondId];
   delete losgekoppeldCache[avondId];
   await renderAanwezigContent();
@@ -3936,8 +4015,10 @@ async function kiesHandmatigPartner(avondId, lidId, partnerId){
 
 async function wisHandmatigPaar(avondId, rowId){
   if(indelingLocked(avondId)) return;
+  const indelingSnapshot = await maakIndelingSnapshot(avondId);
   const { error } = await db.from('avond_voorkeur_paren').delete().eq('id', rowId);
   if(error){ toast('Verwijderen mislukt'); return; }
+  registreerIndelingUndo(avondId, 'Voorstel verwijderd', indelingSnapshot);
   if(voorkeurParenCache[avondId]) voorkeurParenCache[avondId] = voorkeurParenCache[avondId].filter(r=>r.id!==rowId);
   await renderAanwezigContent();
   toast('Voorstel verwijderd');
@@ -3958,8 +4039,10 @@ async function loadLosgekoppeldVoorAvond(avondId){
 async function loskoppelenVanVastePartner(avondId, lidId){
   if(indelingLocked(avondId)) return;
   if((losgekoppeldCache[avondId]||[]).some(r=>r.lid_id===lidId)) return;
+  const indelingSnapshot = await maakIndelingSnapshot(avondId);
   const { error } = await db.from('avond_losgekoppeld').insert({ speelavond_id: avondId, lid_id: lidId });
   if(error){ toast('Loskoppelen mislukt'); return; }
+  registreerIndelingUndo(avondId, 'Losgekoppeld van vaste partner', indelingSnapshot);
   delete losgekoppeldCache[avondId];
   await renderAanwezigContent();
   toast('Losgekoppeld van vaste partner voor deze avond');
@@ -3967,8 +4050,10 @@ async function loskoppelenVanVastePartner(avondId, lidId){
 
 async function herstelVastePartner(avondId, lidId){
   if(indelingLocked(avondId)) return;
+  const indelingSnapshot = await maakIndelingSnapshot(avondId);
   const { error } = await db.from('avond_losgekoppeld').delete().eq('speelavond_id', avondId).eq('lid_id', lidId);
   if(error){ toast('Herstellen mislukt'); return; }
+  registreerIndelingUndo(avondId, 'Vaste partner herstelde', indelingSnapshot);
   delete losgekoppeldCache[avondId];
   await renderAanwezigContent();
   toast('Vaste partner hersteld voor deze avond');
@@ -4055,7 +4140,9 @@ async function husselIndeling(avondId){
     return;
   }
   if(!confirm('Alle paren krijgen een nieuwe willekeurige volgorde/nummering binnen hun lijn. Weet u het zeker?')) return;
+  const indelingSnapshot = await maakIndelingSnapshot(avondId);
   await shuffleAllePaarVolgordePerLijn(avondId);
+  registreerIndelingUndo(avondId, 'Indeling gehusseld', indelingSnapshot);
   await renderAanwezigContent();
   toast('Indeling gehusseld');
 }
@@ -4083,6 +4170,21 @@ async function persistParenGroepOverride(avondId, paarKey, groep){
   delete paarGroepOverrideCache[avondId];
 }
 
+// Deel 167, Kay's melding ("soms als ik op de naam van een paar druk dan
+// gooit de app ze al uit elkaar"): de sleepfuncties hieronder (startLosseDrag,
+// startParenVolgordeDrag, startSterkteDrag) reageerden al op het allereerste
+// pointerdown-pointerup-paar, ook als de vinger/muis daartussen geen millimeter
+// had bewogen. Omdat het ⠿-sleepgreepje vlak naast de naam staat (kleine
+// hit-target, smalle rij), werd een gewone tik dicht bij de naam dus vaak al
+// als "gesleept en los op lege ruimte neergezet" gezien -- en dat triggerde in
+// startLosseDrag meteen loskoppelenVanVastePartner/wisHandmatigPaar. Vanaf nu
+// moet de aanraking minstens DRAG_DREMPEL_PX bewegen voordat een drag als
+// "echt" wordt gezien; blijft die beweging daaronder, dan wordt er bij het
+// loslaten niets uitgevoerd (gewoon alsof er niets is gebeurd). Echt slepen
+// (de beweging die Kay terecht als "werkt goed" omschrijft) verandert hier
+// niets aan.
+const DRAG_DREMPEL_PX = 8;
+
 function startLosseDrag(e, row){
   e.preventDefault();
   const lidId = row.dataset.lidId;
@@ -4090,6 +4192,7 @@ function startLosseDrag(e, row){
   const grabOffsetX = e.clientX - rect.left;
   const grabOffsetY = e.clientY - rect.top;
   let lastX = e.clientX, lastY = e.clientY;
+  let bewogen = false;
 
   const ghost = row.cloneNode(true);
   ghost.classList.add('sterkte-ghost');
@@ -4109,6 +4212,7 @@ function startLosseDrag(e, row){
   const onMove = (ev)=>{
     lastX = ev.clientX;
     lastY = ev.clientY;
+    if(!bewogen && (Math.abs(ev.clientX - e.clientX) > DRAG_DREMPEL_PX || Math.abs(ev.clientY - e.clientY) > DRAG_DREMPEL_PX)) bewogen = true;
     update();
   };
 
@@ -4118,6 +4222,8 @@ function startLosseDrag(e, row){
     stopAutoScroll();
     ghost.remove();
     row.classList.remove('sterkte-placeholder');
+
+    if(!bewogen) return; // enkel getikt, niet echt gesleept -- geen actie
 
     const target = document.elementFromPoint(ev.clientX, ev.clientY);
     const rij = target && target.closest('[data-losse-rij]');
@@ -4181,6 +4287,7 @@ function startParenVolgordeDrag(e, kaart){
   const grabOffsetX = e.clientX - rect.left;
   const grabOffsetY = e.clientY - rect.top;
   let lastX = e.clientX, lastY = e.clientY;
+  let bewogen = false; // deel 167, zie toelichting bij DRAG_DREMPEL_PX
 
   const ghost = kaart.cloneNode(true);
   ghost.classList.add('sterkte-ghost');
@@ -4220,6 +4327,7 @@ function startParenVolgordeDrag(e, kaart){
   const onMove = (ev)=>{
     lastX = ev.clientX;
     lastY = ev.clientY;
+    if(!bewogen && (Math.abs(ev.clientX - e.clientX) > DRAG_DREMPEL_PX || Math.abs(ev.clientY - e.clientY) > DRAG_DREMPEL_PX)) bewogen = true;
     update();
   };
 
@@ -4230,13 +4338,21 @@ function startParenVolgordeDrag(e, kaart){
     ghost.remove();
     kaart.classList.remove('sterkte-placeholder');
 
+    if(!bewogen) return; // enkel getikt, niet echt gesleept -- niets opslaan
+    if(indelingLocked(activeAvondAanwezigId)) return;
+
     const eindGroep = list.dataset.groep;
     const paarKey = kaart.dataset.paarKey;
+    // Deel 168: één foto voor de hele sleep-actie (eventuele lijn-wissel
+    // + de nieuwe volgorde horen bij hetzelfde loslaten, dus bij hetzelfde
+    // "Ongedaan maken" -- zie registreerIndelingUndo hierboven.
+    const indelingSnapshot = await maakIndelingSnapshot(activeAvondAanwezigId);
     if(eindGroep !== startGroep && paarKey){
       await persistParenGroepOverride(activeAvondAanwezigId, paarKey, eindGroep);
     }
     const orderedKeys = [...list.children].map(k=>k.dataset.paarKey);
     await persistParenVolgorde(activeAvondAanwezigId, orderedKeys);
+    registreerIndelingUndo(activeAvondAanwezigId, eindGroep !== startGroep ? 'Paar naar andere lijn verplaatst' : 'Volgorde aangepast', indelingSnapshot);
   };
 
   document.addEventListener('pointermove', onMove);
@@ -4258,6 +4374,7 @@ function startSterkteDrag(e, rij){
   const grabOffsetX = e.clientX - rect.left;
   const grabOffsetY = e.clientY - rect.top;
   let lastX = e.clientX, lastY = e.clientY;
+  let bewogen = false; // deel 167, zie toelichting bij DRAG_DREMPEL_PX
 
   const ghost = rij.cloneNode(true);
   ghost.classList.add('sterkte-ghost');
@@ -4291,6 +4408,7 @@ function startSterkteDrag(e, rij){
   const onMove = (ev)=>{
     lastX = ev.clientX;
     lastY = ev.clientY;
+    if(!bewogen && (Math.abs(ev.clientX - e.clientX) > DRAG_DREMPEL_PX || Math.abs(ev.clientY - e.clientY) > DRAG_DREMPEL_PX)) bewogen = true;
     update();
   };
 
@@ -4300,6 +4418,8 @@ function startSterkteDrag(e, rij){
     stopAutoScroll();
     ghost.remove();
     rij.classList.remove('sterkte-placeholder');
+
+    if(!bewogen) return; // enkel getikt, niet echt gesleept -- niets opslaan
 
     const orderedIds = [...list.children].map(r=>r.dataset.lidId);
     await persistSterktelijstVolgorde(orderedIds);
@@ -5119,6 +5239,19 @@ async function renderAanwezigContent(){
         </select>
       </div>
     </div>`;
+
+  // Deel 168, Kay's verzoek: "Ongedaan maken"-knop voor de laatste
+  // koppel/loskoppel/volgorde-actie op de Indeling-pagina (zie
+  // registreerIndelingUndo/ongedaanMakenIndelingActie hierboven). Alleen
+  // zichtbaar als die laatste actie bij déze avond hoort -- bij een andere
+  // avond bekijken verdwijnt de knop vanzelf, al blijft de actie zelf
+  // onthouden voor als men teruggaat.
+  if(laatsteIndelingActie && laatsteIndelingActie.avondId === activeAvondAanwezigId){
+    html += `<div class="card" style="margin:0 6px 14px;padding:10px 14px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;background:var(--info-bg)">
+        <span style="flex:1 1 auto;min-width:0">Laatste actie: ${escHtml(laatsteIndelingActie.label)}</span>
+        <button type="button" class="btn btn-sm" onclick="ongedaanMakenIndelingActie()">↩ Ongedaan maken</button>
+      </div>`;
+  }
 
   // Deel 113, Kay's verzoek: Golfdashboard-deelnemers die niet op e-mailadres
   // gekoppeld konden worden (naam-terugval of helemaal geen match, zie deel
@@ -6550,6 +6683,7 @@ async function drukIndelingAf(avondId){
 async function wisIndeling(avondId){
   if(indelingLocked(avondId)) return;
   if(!confirm('Alle koppelingen voor deze avond worden gewist. Weet u het zeker?')) return;
+  const indelingSnapshot = await maakIndelingSnapshot(avondId);
 
   const { error: parenError } = await db.from('avond_voorkeur_paren').delete().eq('speelavond_id', avondId);
   if(parenError){ toast('Wissen van teamindeling mislukt'); return; }
@@ -6560,6 +6694,7 @@ async function wisIndeling(avondId){
   // horen ook bij een "helemaal opnieuw beginnen" gewist te worden.
   await db.from('avond_invallers').delete().eq('speelavond_id', avondId);
 
+  registreerIndelingUndo(avondId, 'Indeling gewist', indelingSnapshot);
   delete voorkeurParenCache[avondId];
   delete losgekoppeldCache[avondId];
   delete parenVolgordeCache[avondId];
@@ -7470,9 +7605,11 @@ async function automatischeIndeling(avondId){
     return;
   }
 
+  const indelingSnapshot = await maakIndelingSnapshot(avondId);
   const { error } = await db.from('avond_voorkeur_paren')
     .insert(nieuweParen.map(([a,b])=>({ speelavond_id: avondId, lid_a_id: a, lid_b_id: b })));
   if(error){ toast('Automatische indeling mislukt'); return; }
+  registreerIndelingUndo(avondId, 'Automatisch indelen', indelingSnapshot);
   delete voorkeurParenCache[avondId];
   await renderAanwezigContent();
   toast(`Automatische indeling gemaakt: ${nieuweParen.length} nieuwe koppeling(en). Controleer het resultaat en pas zo nodig handmatig aan vóór het publiceren.`);
