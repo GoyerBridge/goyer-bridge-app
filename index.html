@@ -682,7 +682,7 @@
       </p>
     </div>
 
-    <p style="font-size:11px;color:var(--text-muted);text-align:center;margin-top:24px;line-height:1.6">&copy; 2026 VanDeLinde Consulting BV<br>v3.14.0</p>
+    <p style="font-size:11px;color:var(--text-muted);text-align:center;margin-top:24px;line-height:1.6">&copy; 2026 VanDeLinde Consulting BV<br>v3.15.0</p>
   </div>
 </div>
 
@@ -9901,11 +9901,13 @@ async function renderAdminKoffertjesPagina(){
 // actieknop (Kay's spar-voorstel: blijft op zijn plek staan i.p.v. direct te
 // verdwijnen/verplaatsen, zodat een vergissing na de bevestigingsstap alsnog
 // te herstellen is — zie ook bevestigBalieHerstel hieronder).
-// metKeuze (deel 47): true voor kaarten in de nieuwe "niet opgehaald"-sectie —
-// daar opent de groene pijl-knop een keuze (Uitgeven/Bestelling annuleren)
-// i.p.v. meteen "Uitgegeven?" te vragen, zie openBalieNietOpgehaaldKeuze
-// hieronder. Voor alle andere kaarten (op tijd wachtend, of "uitgeleend")
-// blijft het bestaande één-knop-met-bevestiging-gedrag ongewijzigd.
+// metKeuze (deel 47, uitgebreid in deel 169): true voor kaarten in de
+// "niet opgehaald"-sectie én (sinds Kay's verzoek om ook een vandaag nog op
+// tijd lopende bestelling te kunnen annuleren) de "vandaag worden opgehaald"-
+// sectie — daar opent de groene pijl-knop een keuze (Uitgeven/Bestelling
+// annuleren) i.p.v. meteen "Uitgegeven?" te vragen, zie openBalieKoffertjeKeuze
+// hieronder. Alleen de "uitgeleend"-kaarten (al opgehaald) houden het oude
+// één-knop-met-bevestiging-gedrag — annuleren heeft daar geen betekenis meer.
 function balieKaartHtml(r, veld, ghost, metKeuze){
   const lid = leden.find(l=>l.id===r.lid_id);
   const naam = lid ? lid.voornaam+' '+lid.achternaam : 'Onbekend';
@@ -9928,7 +9930,7 @@ function balieKaartHtml(r, veld, ghost, metKeuze){
   const actieHtml = ghost
     ? `<button class="balie-herstel-knop" onclick="bevestigBalieHerstel('${r.id}','${veld}')">Herstel</button>`
     : (metKeuze
-        ? `<button class="balie-actie-knop" title="Acties" onclick="openBalieNietOpgehaaldKeuze('${r.id}')">${iconSvg}</button>`
+        ? `<button class="balie-actie-knop" title="Acties" onclick="openBalieKoffertjeKeuze('${r.id}')">${iconSvg}</button>`
         : `<button class="balie-actie-knop" title="${actieLabel}" onclick="bevestigBalieActie('${r.id}','${actieFn}','${bevestigTekst}')">${iconSvg}</button>`);
 
   return `<div class="balie-kaart ${verlopen ? 'balie-kaart-verlopen' : ''} ${teLaat ? 'balie-kaart-te-laat' : ''} ${ghost ? 'balie-kaart-gedaan' : ''}">
@@ -9944,15 +9946,24 @@ function balieKaartHtml(r, veld, ghost, metKeuze){
 // kaart (Balie) eerst een keuze tonen — Uitgeven, of Bestelling annuleren —
 // i.p.v. direct "Uitgegeven?" te vragen. Hergebruikt de bestaande
 // #koffertjeModal (dezelfde die Admin al gebruikt voor koffertje-details).
-function openBalieNietOpgehaaldKeuze(rowId){
+// Deel 169, Kay's verzoek: dezelfde keuze nu ook voor een kaart die nog
+// helemaal niet te laat is (ophaaldatum = vandaag) — bijvoorbeeld als een lid
+// belt om door te geven dat hij toch niet meer langskomt. Functienaam
+// daarom verbreed van openBalieNietOpgehaaldKeuze naar openBalieKoffertjeKeuze;
+// de inhoud van de pop-up is hetzelfde, alleen het onderschrift maakt nu
+// onderscheid tussen "te laat" en "wordt vandaag opgehaald".
+function openBalieKoffertjeKeuze(rowId){
   const open = koffertjeOpenCache || [];
   const row = open.find(r=>r.id===rowId);
   if(!row) return;
   const lid = leden.find(l=>l.id===row.lid_id);
   const naam = lid ? lid.voornaam+' '+lid.achternaam : 'Onbekend lid';
+  const onderschrift = koffertjeIsTeLaatOpgehaald(row)
+    ? `${naam} — nog niet opgehaald op de afgesproken dag`
+    : `${naam} — wordt vandaag opgehaald`;
   document.getElementById('koffertjeModal-inhoud').innerHTML = `
     <div style="font-weight:600;margin-bottom:4px">Koffertje ${row.koffertje_nummer}</div>
-    <div class="sub" style="margin-bottom:16px">${naam} — nog niet opgehaald op de afgesproken dag</div>
+    <div class="sub" style="margin-bottom:16px">${onderschrift}</div>
     <button class="btn btn-primary" style="width:100%;justify-content:center;margin-bottom:8px" onclick="bevestigBalieAlsnogUitgeven('${row.id}')">Uitgeven</button>
     <button class="btn btn-danger" style="width:100%;justify-content:center;margin-bottom:8px" onclick="annuleerKoffertjeBestelling('${row.id}')">Bestelling annuleren</button>
     <button class="btn btn-sm" style="width:100%;justify-content:center" onclick="sluitKoffertjeModal()">Sluiten</button>`;
@@ -10077,7 +10088,7 @@ async function renderBaliePagina(){
     <div class="balie-sectie balie-sectie-ophalen">
       <div style="font-weight:600;margin:0 0 8px">Koffertjes die vandaag worden opgehaald (${vandaagActief.length})</div>
       <div class="balie-grid">
-        ${wachtend.length ? wachtend.map(x=>balieKaartHtml(x.r,'opgehaald_op',x.ghost)).join('') : '<div class="empty">Geen koffertjes die opgehaald moeten worden</div>'}
+        ${wachtend.length ? wachtend.map(x=>balieKaartHtml(x.r,'opgehaald_op',x.ghost,true)).join('') : '<div class="empty">Geen koffertjes die opgehaald moeten worden</div>'}
       </div>
     </div>
     <div class="balie-sectie balie-sectie-terugbrengen">
